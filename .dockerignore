@@ -1,0 +1,8 @@
+.git/
+.github/
+.zig-cache/
+zig-out/
+scripts/
+research/
+docs/
+*.md

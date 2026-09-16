@@ -1,0 +1,22 @@
+[Unit]
+Description=Zeptun userspace TUN network engine
+Documentation=https://github.com/noisemux/zeptun
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/zeptun run -c /etc/zeptun/zeptun.toml
+Restart=on-failure
+RestartSec=2
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
