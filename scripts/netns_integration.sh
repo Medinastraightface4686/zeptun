@@ -192,8 +192,8 @@ netns_case() {
     "$ZEPTUN" run --tun zepns0 --netns "$nspath" --auto-route --stack userspace --log-level warn > "$LOG_DIR/$name.log" 2>&1 &
     engine=$!
     i=0
-    while [ $i -lt 100 ]; do
-        nsenter --net="$nspath" ip link show zepns0 > /dev/null 2>&1 && break
+    while [ $i -lt 200 ]; do
+        nsenter --net="$nspath" ip rule show 2> /dev/null | grep -q "^900" && break
         i=$((i + 1))
         sleep 0.1
     done
