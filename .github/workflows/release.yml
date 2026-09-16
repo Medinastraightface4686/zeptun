@@ -132,6 +132,7 @@ jobs:
           cp conf/zeptun.toml zeptun-win-${{ matrix.name }}/
           cp README.md LICENSE zeptun-win-${{ matrix.name }}/ 2> /dev/null || true
           sh scripts/fetch_wintun.sh ${{ matrix.wintun }} zeptun-win-${{ matrix.name }}
+          test -f zeptun-win-${{ matrix.name }}/wintun.dll
           zip -r zeptun-windows-${{ matrix.name }}.zip zeptun-win-${{ matrix.name }}
       - uses: actions/upload-artifact@v7
         with:

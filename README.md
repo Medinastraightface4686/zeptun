@@ -68,7 +68,7 @@ zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast
 make wintun
 ```
 
-The tunnel uses Wintun. The released Windows archives already contain `wintun.dll` next to `zeptun.exe`, so nothing else is needed; `make wintun` fetches and verifies the same file for a local build (`WINTUN_ARCH=arm64` for arm64).
+The tunnel uses Wintun, which is vendored in `third-part/wintun` with its licence and header, so no download is needed: `make wintun` copies the right `wintun.dll` next to the executable (`WINTUN_ARCH=arm64` for arm64). The released Windows archives already contain it.
 
 ### Library
 

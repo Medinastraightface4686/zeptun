@@ -60,7 +60,22 @@ zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast
 make wintun
 ```
 
-The tunnel uses Wintun. The released Windows archives ship `wintun.dll` beside `zeptun.exe`, which is where the loader looks first, so a downloaded release needs no extra step. For a local build, `make wintun` downloads the official distribution, checks its SHA-256 and places the right library in `zig-out/bin`; pass `WINTUN_ARCH=arm64` for arm64 hosts. `scripts/fetch_wintun.sh ARCH DIR` does the same for any directory.
+The tunnel uses Wintun. The library ships with the source in `third-part/wintun`, together with its licence, README and header, for `amd64`, `arm64`, `x86` and `arm`:
+
+```
+third-part/wintun/
+    LICENSE.txt
+    README.md
+    VERSION
+    bin/<arch>/wintun.dll
+    include/wintun.h
+```
+
+`make wintun` copies the matching library and its licence into `zig-out/bin`, next to the executable, which is where the loader looks first (`LOAD_LIBRARY_SEARCH_APPLICATION_DIR`). Pass `WINTUN_ARCH=arm64` for arm64 hosts, or call `scripts/fetch_wintun.sh ARCH DIR` for any other directory. Released archives already contain the library, so a downloaded release needs no extra step.
+
+`scripts/fetch_wintun.sh --vendor` refreshes the vendored copy: it downloads the official distribution from wintun.net, checks it against the SHA-256 pinned in the script, and replaces the tree. Set `WINTUN_VERSION` and `WINTUN_SHA256` to move to a new release.
+
+Wintun is not modified, and its prebuilt binaries licence permits redistribution alongside software that uses only the documented API, which is what `src/device/wintun.zig` does through `LoadLibraryEx` and `GetProcAddress`.
 
 MSVC targets build as well: `-Dtarget=x86_64-windows-msvc`.
 
