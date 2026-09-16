@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="242" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="13">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="16" y="24" font-size="15" font-weight="600" fill="#0f172a">Resident memory</text>
+<text x="16" y="42" font-size="12" fill="#64748b">highest sample of every run &#183; lower is better</text>
+<text x="16" y="68" font-size="12" font-weight="600" fill="#334155">peak while forwarding</text>
+<text x="142" y="70" text-anchor="end" font-size="12" fill="#475569">zeptun-hybrid</text>
+<rect x="150" y="56" width="191" height="16" rx="3" fill="#2563eb"/>
+<text x="349" y="70" font-size="12" fill="#0f172a">37.77 MB</text>
+<text x="142" y="94" text-anchor="end" font-size="12" fill="#475569">zeptun-userspace</text>
+<rect x="150" y="80" width="115" height="16" rx="3" fill="#64748b"/>
+<text x="273" y="94" font-size="12" fill="#0f172a">22.87 MB</text>
+<text x="142" y="118" text-anchor="end" font-size="12" fill="#475569">hev</text>
+<rect x="150" y="104" width="104" height="16" rx="3" fill="#0f766e"/>
+<text x="262" y="118" font-size="12" fill="#0f172a">20.64 MB</text>
+<text x="142" y="142" text-anchor="end" font-size="12" fill="#475569">singbox-gvisor</text>
+<rect x="150" y="128" width="454" height="16" rx="3" fill="#b45309"/>
+<text x="612" y="142" font-size="12" fill="#0f172a">89.81 MB</text>
+<text x="142" y="166" text-anchor="end" font-size="12" fill="#475569">singbox-system</text>
+<rect x="150" y="152" width="360" height="16" rx="3" fill="#7c3aed"/>
+<text x="518" y="166" font-size="12" fill="#0f172a">71.15 MB</text>
+<text x="142" y="190" text-anchor="end" font-size="12" fill="#475569">tun2socks</text>
+<rect x="150" y="176" width="680" height="16" rx="3" fill="#be123c"/>
+<text x="838" y="190" font-size="12" fill="#0f172a">134 MB</text>
+</svg>
