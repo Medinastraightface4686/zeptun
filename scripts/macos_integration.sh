@@ -16,7 +16,7 @@ FAILURES=""
 check() {
     label=$1
     shift
-    if timeout 30 "$@" > "$LOG_DIR/step.log" 2>&1 || "$@" > "$LOG_DIR/step.log" 2>&1; then
+    if "$@" > "$LOG_DIR/step.log" 2>&1; then
         PASSED=$((PASSED + 1))
         printf "  ok    %-46s %s\n" "$label" "$(tail -n 1 "$LOG_DIR/step.log")"
     else
@@ -33,7 +33,7 @@ printf "baseline http %s\n" "$baseline"
 "$ZEPTUN" run --tun "$TUN_NAME" --handler direct --mtu 1500 \
     --address "$TUN_ADDR/30" \
     --route "$HTTP_TARGET/32" --route "$DNS_TARGET/32" \
-    --icmp forward --log-level info > "$LOG_DIR/zeptun.log" 2>&1 &
+    --icmp forward --log-level debug > "$LOG_DIR/zeptun.log" 2>&1 &
 engine=$!
 
 i=0
@@ -54,7 +54,9 @@ printf "case macos-utun\n"
 check "interface carries the tunnel address" sh -c "ifconfig $TUN_NAME | grep -q $TUN_ADDR"
 check "route points at the tunnel" sh -c "route -n get $HTTP_TARGET | grep -q $TUN_NAME"
 check "tcp through the tunnel" sh -c "curl -s -m 25 -o /dev/null -w 'http %{http_code} in %{time_total}s' http://$HTTP_TARGET | grep -qE 'http (200|301|302)'"
-check "dns over udp through the tunnel" sh -c "$BENCH dns-client --server $DNS_TARGET:53 --name example.com --count 3 | grep -qv 'no address'"
+printf "  ..    dns probe output: %s\n" "$("$BENCH" dns-client --server "$DNS_TARGET:53" --name example.com --count 3 2>&1 | tail -1)"
+check "dns over udp through the tunnel" sh -c "$BENCH dns-client --server $DNS_TARGET:53 --name example.com --count 3 2>&1 | grep -q 'rcode 0' && ! $BENCH dns-client --server $DNS_TARGET:53 --name example.com --count 1 2>&1 | grep -q 'no address'"
+check "dns over udp with the system resolver tool" sh -c "dig +time=5 +tries=2 @$DNS_TARGET example.com A | grep -q 'ANSWER SECTION'"
 check "icmp through the tunnel" ping -c 3 -t 5 "$HTTP_TARGET"
 check "a destination outside the tunnel still works" sh -c "curl -s -m 25 -o /dev/null -w '%{http_code}' https://api.github.com | grep -qE '200|401|403'"
 
@@ -70,6 +72,6 @@ printf "\nmacos integration: %d passed, %d failed\n" "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf "failures:$FAILURES\n"
     printf "engine log:\n"
-    sed 's/^/    /' "$LOG_DIR/zeptun.log" | tail -n 25
+    sed 's/^/    /' "$LOG_DIR/zeptun.log" | tail -n 40
     exit 1
 fi
