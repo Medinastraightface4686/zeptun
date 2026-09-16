@@ -65,9 +65,10 @@ This produces `zig-out/Zeptun.xcframework` with the iOS device, iOS simulator an
 
 ```sh
 zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast
+make wintun
 ```
 
-The tunnel uses Wintun; place `wintun.dll` next to the executable.
+The tunnel uses Wintun. The released Windows archives already contain `wintun.dll` next to `zeptun.exe`, so nothing else is needed; `make wintun` fetches and verifies the same file for a local build (`WINTUN_ARCH=arm64` for arm64).
 
 ### Library
 

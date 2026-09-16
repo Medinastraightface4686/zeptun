@@ -57,9 +57,12 @@ Produces `zig-out/Zeptun.xcframework` with iOS device, iOS simulator and macOS s
 
 ```sh
 zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast
+make wintun
 ```
 
-The tunnel uses Wintun; place `wintun.dll` next to the executable. MSVC targets build as well: `-Dtarget=x86_64-windows-msvc`.
+The tunnel uses Wintun. The released Windows archives ship `wintun.dll` beside `zeptun.exe`, which is where the loader looks first, so a downloaded release needs no extra step. For a local build, `make wintun` downloads the official distribution, checks its SHA-256 and places the right library in `zig-out/bin`; pass `WINTUN_ARCH=arm64` for arm64 hosts. `scripts/fetch_wintun.sh ARCH DIR` does the same for any directory.
+
+MSVC targets build as well: `-Dtarget=x86_64-windows-msvc`.
 
 ## Container
 

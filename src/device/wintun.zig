@@ -59,7 +59,7 @@ pub const Api = struct {
 
     pub fn load() !Api {
         const library = kernel32.LoadLibraryExW(library_name, null, win.LOAD_LIBRARY_SEARCH_APPLICATION_DIR | win.LOAD_LIBRARY_SEARCH_SYSTEM32) orelse {
-            log.err("wintun: cannot load wintun.dll (error {d})", .{win.lastError()});
+            log.err("wintun: cannot load wintun.dll from the program directory or system32 (error {d})", .{win.lastError()});
             return error.DeviceNotFound;
         };
         errdefer _ = kernel32.FreeLibrary(library);
