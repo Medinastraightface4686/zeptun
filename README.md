@@ -22,9 +22,13 @@ A userspace network engine for TUN devices, written in Zig with no dependencies.
 
 ## Benchmarks
 
-Charts and raw numbers come from the [benchmark workflow](.github/workflows/benchmark.yml), which runs on a GitHub-hosted runner against hev-socks5-tunnel, sing-box and tun2socks over the same SOCKS5 server. The runner specification is recorded with every run.
+Measured by the [benchmark workflow](.github/workflows/benchmark.yml) on a GitHub-hosted runner, against four other engines over the same SOCKS5 server.
 
-See [docs/bench](docs/bench) for the current results.
+<img src="docs/bench/summary-throughput.svg" width="420" alt="throughput">
+<img src="docs/bench/summary-cpu.svg" width="420" alt="cpu">
+<img src="docs/bench/summary-transactions.svg" width="420" alt="transactions">
+
+Method, runner specification, latency, UDP, memory and the raw tables: [docs/bench](docs/bench).
 
 ## Build
 
@@ -313,6 +317,8 @@ Elastic queues start with a single worker and add a queue only while it raises t
 | `zig build test-ffi` | `tests/ffi_smoke.c` compiled with `-Wall -Wextra -Werror` against `libzeptun.a` |
 | `zig build test-integration` | 189 end-to-end checks through a real TUN device between two namespaces |
 | `zig build bench` | hot-path microbenchmarks with a regression gate |
+
+Full documentation lives in the [wiki](../../wiki): [Building](../../wiki/Building), [Configuration](../../wiki/Configuration), [Command line](../../wiki/Command-line), [Routing](../../wiki/Routing), [Stacks](../../wiki/Stacks), [C API](../../wiki/C-API), [Android](../../wiki/Android), [Apple](../../wiki/Apple), [Container](../../wiki/Container), [Benchmarks](../../wiki/Benchmarks), [Testing](../../wiki/Testing).
 
 The integration suite covers every stack mode, both io backends, one and four queues, direct and SOCKS5, offloads on and off, UDP over TCP, fake-IP, strict routing, auto-redirect, elastic queue rotation under load, and the network namespace mode. The TCP simulation drives the real terminator against a model peer over lossy, reordering links and verifies every byte, leaving no buffers, timers or completions behind.
 

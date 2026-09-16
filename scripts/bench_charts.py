@@ -101,11 +101,103 @@ def order(rows, scenarios):
     return present, engines
 
 
+def compact(path, title, note, rows, unit, better, width=440):
+    label_width = 128
+    bar = 15
+    gap = 5
+    top = 46
+    height = top + len(rows) * (bar + gap) + 12
+    span = width - label_width - 74
+    best = max([value for _, value in rows] + [1.0])
+    out = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        'font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="12">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        f'<text x="12" y="20" font-size="13" font-weight="600" fill="#0f172a">{escape(title)}</text>',
+        f'<text x="12" y="36" font-size="11" fill="#64748b">{escape(note)} &#183; {escape(better)}</text>',
+    ]
+    y = top
+    for index, (name, value) in enumerate(rows):
+        length = 0 if best == 0 else max(2, int(span * value / best))
+        color = PALETTE[0] if index == 0 else "#94a3b8"
+        out.append(
+            f'<text x="{label_width - 8}" y="{y + bar - 3}" text-anchor="end" font-size="11" fill="#475569">{escape(name)}</text>'
+        )
+        out.append(
+            f'<rect x="{label_width}" y="{y}" width="{length}" height="{bar - 2}" rx="2" fill="{color}"/>'
+        )
+        text = f"{value:.1f}" if value < 100 else f"{value:.0f}"
+        out.append(
+            f'<text x="{label_width + length + 6}" y="{y + bar - 3}" font-size="11" fill="#0f172a">{text} {escape(unit)}</text>'
+        )
+        y += bar + gap
+    out.append("</svg>")
+    with open(path, "w") as handle:
+        handle.write("\n".join(out) + "\n")
+
+
+NAMES = {
+    "zeptun-userspace": "zeptun",
+    "zeptun-hybrid": "zeptun hybrid",
+    "hev": "hev-socks5-tunnel",
+    "singbox-system": "sing-box system",
+    "singbox-gvisor": "sing-box gvisor",
+    "tun2socks": "tun2socks",
+}
+
+
+def summary(rows, out_dir, dest):
+    wanted = ["zeptun-userspace", "hev", "singbox-system", "singbox-gvisor", "tun2socks"]
+
+    def rank(scenario, pick, reverse=True):
+        values = {}
+        for row in rows:
+            if row["scenario"] != scenario or row["engine"] not in wanted:
+                continue
+            values.setdefault(row["engine"], []).append(pick(row, detail(out_dir, row["engine"], scenario, row["rep"])))
+        ordered = [(NAMES.get(name, name), statistics.median(items)) for name, items in values.items()]
+        ordered.sort(key=lambda item: item[1], reverse=reverse)
+        head = [item for item in ordered if item[0] == "zeptun"]
+        return head + [item for item in ordered if item[0] != "zeptun"]
+
+    speed = rank("tcp-up-10", lambda row, _: number(row["value"]))
+    if speed:
+        compact(
+            os.path.join(dest, "summary-throughput.svg"),
+            "Throughput, 10 streams through SOCKS5",
+            "GitHub-hosted runner",
+            speed,
+            "Gbit/s",
+            "higher is better",
+        )
+    cpu = rank("tcp-up-10", lambda row, _: float(row["cpu_pct"]), reverse=False)
+    if cpu:
+        compact(
+            os.path.join(dest, "summary-cpu.svg"),
+            "CPU at the same load",
+            "GitHub-hosted runner",
+            cpu,
+            "%",
+            "lower is better",
+        )
+    tps = rank("rr-8x1k", lambda _, d: d.get("tps", 0.0))
+    if tps:
+        compact(
+            os.path.join(dest, "summary-transactions.svg"),
+            "Request/response, 8 connections",
+            "GitHub-hosted runner",
+            tps,
+            "tps",
+            "higher is better",
+        )
+
+
 def main():
     out_dir = sys.argv[1]
     dest = sys.argv[2]
     os.makedirs(dest, exist_ok=True)
     rows = load(os.path.join(out_dir, "results.jsonl"))
+    summary(rows, out_dir, dest)
 
     bulk = ["tcp-up-1", "tcp-up-10", "tcp-down-1", "tcp-down-10"]
     scenarios, engines = order(rows, bulk)
