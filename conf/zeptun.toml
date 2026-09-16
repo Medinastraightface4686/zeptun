@@ -1,0 +1,71 @@
+preset = "desktop"
+log_level = "warn"
+stats_interval_s = 0
+
+[tun]
+name = "zeptun0"
+mtu = 8500
+queues = 0
+offload = true
+multi_queue = true
+jumbo = true
+configure = true
+netns = ""
+address = ["172.19.0.1/30", "fdfe:dcba:9876::1/126"]
+
+[stack]
+mode = "userspace"
+tcp_rx_window = 524288
+tcp_tx_buffer = 1048576
+congestion = "cubic"
+sack = true
+timestamps = true
+window_scaling = true
+tcp_connect_timeout_ms = 10000
+tcp_idle_timeout_ms = 7200000
+tcp_delayed_ack_ms = 1
+udp_idle_timeout_ms = 60000
+udp = true
+udp_nat = "endpoint_independent"
+icmp = "auto"
+max_tcp_sessions = 65536
+max_udp_sessions = 16384
+
+[handler]
+kind = "socks5"
+tcp_fastopen = false
+preserve_dscp = true
+
+[handler.socks5]
+server = "127.0.0.1:1080"
+udp = true
+udp_mode = "udp"
+pipeline = true
+pool_size = 4
+pool_idle_ms = 3000
+
+[handler.direct]
+fwmark = 0
+bind_interface = ""
+
+[route]
+auto_route = true
+strict = false
+auto_redirect = false
+include = ["0.0.0.0/0", "::/0"]
+exclude = []
+
+[io]
+backend = "auto"
+workers = 0
+rx_parallel = 8
+tx_slots = 1024
+multishot_rx = true
+monitor_network = true
+
+[dns]
+fake_ip = false
+hijack = false
+cache_size = 16384
+ttl = 1
+systemd_resolved = true
