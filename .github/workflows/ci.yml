@@ -129,7 +129,7 @@ jobs:
           LOG_DIR: ${{ github.workspace }}/macos-logs
         run: |
           mkdir -p "$LOG_DIR"
-          sudo -E sh scripts/macos_integration.sh zig-out/bin/zeptun zig-out/bin/zeptun-bench
+          sudo -E sh scripts/macos_integration.sh zig-out/bin/zeptun
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

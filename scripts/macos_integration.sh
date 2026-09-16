@@ -2,7 +2,6 @@
 set -eu
 
 ZEPTUN=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
-BENCH=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
 LOG_DIR=${LOG_DIR:-$(mktemp -d)}
 TUN_NAME=${TUN_NAME:-utun9}
 TUN_ADDR=${TUN_ADDR:-172.19.0.1}
@@ -54,9 +53,8 @@ printf "case macos-utun\n"
 check "interface carries the tunnel address" sh -c "ifconfig $TUN_NAME | grep -q $TUN_ADDR"
 check "route points at the tunnel" sh -c "route -n get $HTTP_TARGET | grep -q $TUN_NAME"
 check "tcp through the tunnel" sh -c "curl -s -m 25 -o /dev/null -w 'http %{http_code} in %{time_total}s' http://$HTTP_TARGET | grep -qE 'http (200|301|302)'"
-printf "  ..    dns probe output: %s\n" "$("$BENCH" dns-client --server "$DNS_TARGET:53" --name example.com --count 3 2>&1 | tail -1)"
-check "dns over udp through the tunnel" sh -c "$BENCH dns-client --server $DNS_TARGET:53 --name example.com --count 3 2>&1 | grep -q 'rcode 0' && ! $BENCH dns-client --server $DNS_TARGET:53 --name example.com --count 1 2>&1 | grep -q 'no address'"
-check "dns over udp with the system resolver tool" sh -c "dig +time=5 +tries=2 @$DNS_TARGET example.com A | grep -q 'ANSWER SECTION'"
+check "dns over udp through the tunnel" sh -c "dig +time=5 +tries=2 @$DNS_TARGET example.com A | grep -q 'ANSWER SECTION'"
+check "dns over udp keeps working under repetition" sh -c "for i in 1 2 3 4 5; do dig +time=5 +tries=1 @$DNS_TARGET example.com A | grep -q 'ANSWER SECTION' || exit 1; done"
 check "icmp through the tunnel" ping -c 3 -t 5 "$HTTP_TARGET"
 check "a destination outside the tunnel still works" sh -c "curl -s -m 25 -o /dev/null -w '%{http_code}' https://api.github.com | grep -qE '200|401|403'"
 
