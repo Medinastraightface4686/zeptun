@@ -115,6 +115,36 @@ jobs:
           name: Zeptun.xcframework
           path: zig-out/Zeptun.xcframework
 
+  macos-tunnel:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build
+        run: zig build -Doptimize=ReleaseFast
+      - name: tunnel through a real utun device
+        run: sudo sh scripts/macos_integration.sh zig-out/bin/zeptun zig-out/bin/zeptun-bench
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: macos-tunnel-logs
+          path: /tmp/*/zeptun.log
+          if-no-files-found: ignore
+
+  ios-simulator:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: c abi test inside the simulator
+        run: sh scripts/ios_simulator.sh
+      - name: xcframework
+        run: sh scripts/make_xcframework.sh
+
   windows:
     runs-on: windows-2022
     steps:

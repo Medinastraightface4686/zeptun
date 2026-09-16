@@ -1,0 +1,75 @@
+#!/bin/sh
+set -eu
+
+ZEPTUN=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+BENCH=$(cd "$(dirname "$2")" && pwd)/$(basename "$2")
+LOG_DIR=${LOG_DIR:-$(mktemp -d)}
+TUN_NAME=${TUN_NAME:-utun9}
+TUN_ADDR=${TUN_ADDR:-172.19.0.1}
+HTTP_TARGET=${HTTP_TARGET:-1.1.1.1}
+DNS_TARGET=${DNS_TARGET:-8.8.8.8}
+
+PASSED=0
+FAILED=0
+FAILURES=""
+
+check() {
+    label=$1
+    shift
+    if timeout 30 "$@" > "$LOG_DIR/step.log" 2>&1 || "$@" > "$LOG_DIR/step.log" 2>&1; then
+        PASSED=$((PASSED + 1))
+        printf "  ok    %-46s %s\n" "$label" "$(tail -n 1 "$LOG_DIR/step.log")"
+    else
+        FAILED=$((FAILED + 1))
+        FAILURES="$FAILURES\n  $label"
+        printf "  FAIL  %s\n" "$label"
+        sed 's/^/        /' "$LOG_DIR/step.log" | tail -n 8
+    fi
+}
+
+baseline=$(curl -s -m 20 -o /dev/null -w "%{http_code}" "http://$HTTP_TARGET" || echo 000)
+printf "baseline http %s\n" "$baseline"
+
+"$ZEPTUN" run --tun "$TUN_NAME" --handler direct --mtu 1500 \
+    --address "$TUN_ADDR/30" \
+    --route "$HTTP_TARGET/32" --route "$DNS_TARGET/32" \
+    --icmp forward --log-level info > "$LOG_DIR/zeptun.log" 2>&1 &
+engine=$!
+
+i=0
+while [ $i -lt 100 ]; do
+    ifconfig "$TUN_NAME" 2> /dev/null | grep -q "$TUN_ADDR" && break
+    i=$((i + 1))
+    sleep 0.2
+done
+
+if ! ifconfig "$TUN_NAME" 2> /dev/null | grep -q "$TUN_ADDR"; then
+    printf "  FAIL  the tunnel did not come up\n"
+    sed 's/^/        /' "$LOG_DIR/zeptun.log" | tail -n 20
+    kill "$engine" 2> /dev/null || true
+    exit 1
+fi
+
+printf "case macos-utun\n"
+check "interface carries the tunnel address" sh -c "ifconfig $TUN_NAME | grep -q $TUN_ADDR"
+check "route points at the tunnel" sh -c "route -n get $HTTP_TARGET | grep -q $TUN_NAME"
+check "tcp through the tunnel" sh -c "curl -s -m 25 -o /dev/null -w 'http %{http_code} in %{time_total}s' http://$HTTP_TARGET | grep -qE 'http (200|301|302)'"
+check "dns over udp through the tunnel" sh -c "$BENCH dns-client --server $DNS_TARGET:53 --name example.com --count 3 | grep -qv 'no address'"
+check "icmp through the tunnel" ping -c 3 -t 5 "$HTTP_TARGET"
+check "a destination outside the tunnel still works" sh -c "curl -s -m 25 -o /dev/null -w '%{http_code}' https://api.github.com | grep -qE '200|401|403'"
+
+kill -INT "$engine"
+wait "$engine" 2> /dev/null || true
+sleep 1
+
+check "interface removed on exit" sh -c "! ifconfig $TUN_NAME 2> /dev/null | grep -q $TUN_ADDR"
+check "route removed on exit" sh -c "! route -n get $HTTP_TARGET 2> /dev/null | grep -q $TUN_NAME"
+check "connectivity intact after teardown" sh -c "curl -s -m 25 -o /dev/null -w '%{http_code}' http://$HTTP_TARGET | grep -qE '200|301|302'"
+
+printf "\nmacos integration: %d passed, %d failed\n" "$PASSED" "$FAILED"
+if [ "$FAILED" -ne 0 ]; then
+    printf "failures:$FAILURES\n"
+    printf "engine log:\n"
+    sed 's/^/    /' "$LOG_DIR/zeptun.log" | tail -n 25
+    exit 1
+fi
