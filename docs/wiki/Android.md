@@ -16,6 +16,21 @@ ABIs are `armeabi-v7a`, `arm64-v8a`, `x86` and `x86_64`. Load segments are align
 
 Without the NDK the script still produces the Zig libraries, which is all an application needs if it calls the [C API](C-API) directly.
 
+## Command line on a rooted device
+
+`zig build -Dtarget=aarch64-linux-android -Doptimize=ReleaseFast` also produces the `zeptun` and `zeptun-bench` executables as static binaries, which is the quickest way to use the engine on a rooted phone:
+
+```sh
+adb push zig-out/bin/zeptun /data/local/tmp/
+adb shell chmod 755 /data/local/tmp/zeptun
+adb shell su -c '/data/local/tmp/zeptun probe'
+adb shell su -c '/data/local/tmp/zeptun run --tun zeptun0 --socks5 127.0.0.1:1080 --route 1.1.1.1/32'
+```
+
+The engine creates the device through `/dev/tun`, installs its rules in the 9000 range, which take precedence over the system rules at 10000 and above, and marks its own upstream sockets with bit 0x200000 so they keep the platform's network selection. Everything is removed when the process stops.
+
+Two details matter on a phone. A proxy running outside the engine needs to bypass the tunnel itself, either through `--exclude-uid` for the user it runs as or through its own socket mark, otherwise its upstream connections are captured and loop. And where the upstream has no IPv6, give the interface only an IPv4 address (`--address 172.19.0.1/30`), so applications do not spend their connect timeout on IPv6 that cannot leave the phone.
+
 ## Kotlin
 
 `libzeptun-jni.so` registers its methods on the class `dev.zeptun.Zeptun`. Change `ZEPTUN_JNI_CLASS` in `src/jni/zeptun_jni.c` to use another package or class name.

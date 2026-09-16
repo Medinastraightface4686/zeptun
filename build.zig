@@ -73,7 +73,7 @@ fn resolveFeatures(o: Overrides, target: std.Target) Features {
         .ipv6 = o.ipv6 orelse true,
         .fragments = o.fragments orelse true,
         .gso = o.gso orelse (os == .linux),
-        .route = o.route orelse !mobile,
+        .route = o.route orelse (os != .ios and os != .tvos and os != .watchos and os != .visionos),
         .tracing = o.tracing orelse false,
         .max_log_level = o.max_log_level orelse 3,
         .mobile = mobile,
@@ -111,7 +111,7 @@ fn needsLibc(t: std.Target) bool {
 fn canLinkExecutables(t: std.Target) bool {
     return switch (t.os.tag) {
         .ios, .tvos, .visionos, .watchos => false,
-        else => !t.abi.isAndroid(),
+        else => true,
     };
 }
 
