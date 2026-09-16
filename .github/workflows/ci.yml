@@ -68,14 +68,16 @@ jobs:
         with:
           version: ${{ env.ZIG_VERSION }}
       - name: build
-        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast -Dstrip=true
       - name: compile tests
         if: ${{ !contains(matrix.target, 'android') && !contains(matrix.target, 'ios') }}
         run: zig build test-compile -Dtarget=${{ matrix.target }}
+      - name: stage
+        run: sh scripts/stage_artifact.sh artifact
       - uses: actions/upload-artifact@v7
         with:
           name: zeptun-${{ matrix.target }}
-          path: zig-out
+          path: artifact
           if-no-files-found: error
 
   android:
