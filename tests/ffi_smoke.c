@@ -70,7 +70,7 @@ static int bypasses_proxy(void) {
     struct sockaddr_in sa;
     memset(&sa, 0, sizeof sa);
     sa.sin_family = AF_INET;
-    sa.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    sa.sin_addr.s_addr = htonl(0x7f000001u);
     if (bind(lfd, (struct sockaddr *)&sa, sizeof sa) != 0 || listen(lfd, 4) != 0) return 41;
     socklen_t len = sizeof sa;
     if (getsockname(lfd, (struct sockaddr *)&sa, &len) != 0) return 42;

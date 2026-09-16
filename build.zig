@@ -267,7 +267,7 @@ pub fn build(b: *std.Build) void {
             test_compile_step.dependOn(&t.step);
         }
 
-        if (target.result.os.tag == .linux) {
+        if (canLinkExecutables(target.result) and target.result.os.tag != .windows) {
             const bench_mod = b.createModule(.{
                 .root_source_file = b.path("src/bench/main.zig"),
                 .target = target,

@@ -125,12 +125,16 @@ jobs:
       - name: build
         run: zig build -Doptimize=ReleaseFast
       - name: tunnel through a real utun device
-        run: sudo sh scripts/macos_integration.sh zig-out/bin/zeptun zig-out/bin/zeptun-bench
+        env:
+          LOG_DIR: ${{ github.workspace }}/macos-logs
+        run: |
+          mkdir -p "$LOG_DIR"
+          sudo -E sh scripts/macos_integration.sh zig-out/bin/zeptun zig-out/bin/zeptun-bench
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: macos-tunnel-logs
-          path: /tmp/*/zeptun.log
+          path: macos-logs
           if-no-files-found: ignore
 
   ios-simulator:
