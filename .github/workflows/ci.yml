@@ -1,0 +1,246 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      netns_bench:
+        description: Run the namespace throughput benchmark against hev-socks5-tunnel
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ZIG_VERSION: 0.16.0
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: unit tests debug
+        run: zig build test --summary all
+      - name: unit tests release safe
+        run: zig build test -Doptimize=ReleaseSafe --summary all
+      - name: c abi smoke test
+        run: zig build test-ffi
+      - name: mobile feature set
+        run: zig build test -Dmobile=true --summary all
+      - name: allow unprivileged namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo sysctl -w kernel.unprivileged_userns_clone=1 || true
+          sudo modprobe tun || true
+          unshare --user --map-root-user --net true
+      - name: tests inside network namespace
+        run: zig build test-netns
+      - name: end to end integration
+        run: zig build test-integration -Doptimize=ReleaseSafe
+
+  cross:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-linux-gnu
+          - x86_64-linux-musl
+          - aarch64-linux-gnu
+          - aarch64-linux-musl
+          - aarch64-linux-android
+          - arm-linux-androideabi
+          - x86_64-linux-android
+          - x86_64-windows-gnu
+          - aarch64-windows-gnu
+          - x86_64-windows-msvc
+          - aarch64-windows-msvc
+          - x86_64-macos
+          - aarch64-macos
+          - aarch64-ios
+          - aarch64-ios-simulator
+          - x86_64-freebsd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast
+      - name: compile tests
+        if: ${{ !contains(matrix.target, 'android') && !contains(matrix.target, 'ios') }}
+        run: zig build test-compile -Dtarget=${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-${{ matrix.target }}
+          path: zig-out
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build jniLibs
+        run: zig build android -Doptimize=ReleaseSmall
+      - name: check 16 KB page alignment
+        run: |
+          for so in zig-out/android/jniLibs/*/libzeptun.so; do
+            align=$(readelf -lW "$so" | awk '$1 == "LOAD" { print $NF; exit }')
+            echo "$so $align"
+            [ "$align" = "0x4000" ]
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-android-jniLibs
+          path: zig-out/android
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: unit tests
+        run: zig build test --summary all
+      - name: xcframework
+        run: sh scripts/make_xcframework.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Zeptun.xcframework
+          path: zig-out/Zeptun.xcframework
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: unit tests
+        run: zig build test --summary all
+      - name: release build
+        run: zig build -Doptimize=ReleaseFast
+
+  bench-gate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: baseline from the base commit
+        continue-on-error: true
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "${{ github.event.pull_request.base.sha }}"
+          cd "$RUNNER_TEMP/base"
+          zig build bench -Doptimize=ReleaseFast -- --min-ms 600
+          cp zig-out/bench/micro.json "$GITHUB_WORKSPACE/micro-base.json"
+      - name: candidate against baseline
+        run: |
+          if [ -f micro-base.json ]; then
+            zig build bench -Doptimize=ReleaseFast -- --min-ms 600 --baseline micro-base.json --max-regression 20
+          else
+            zig build bench -Doptimize=ReleaseFast -- --min-ms 600
+          fi
+      - name: summary
+        if: always()
+        run: cat zig-out/bench/micro.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: micro-bench
+          path: |
+            zig-out/bench
+            micro-base.json
+
+  bench-main:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: microbenchmarks
+        run: zig build bench -Doptimize=ReleaseFast -- --min-ms 600
+      - name: summary
+        run: cat zig-out/bench/micro.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: micro-bench-${{ github.sha }}
+          path: zig-out/bench
+
+  netns-bench:
+    if: github.event_name == 'workflow_dispatch' && inputs.netns_bench
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y iperf3 build-essential git python3
+          git clone --depth 1 --recursive https://github.com/heiher/hev-socks5-tunnel "$RUNNER_TEMP/hev-socks5-tunnel"
+          make -C "$RUNNER_TEMP/hev-socks5-tunnel" -j"$(nproc)"
+          git clone --depth 1 --recursive https://github.com/heiher/hev-socks5-server "$RUNNER_TEMP/hev-socks5-server"
+          make -C "$RUNNER_TEMP/hev-socks5-server" -j"$(nproc)"
+          curl -sSL -o "$RUNNER_TEMP/t2s.zip" https://github.com/xjasonlyu/tun2socks/releases/download/v2.7.0/tun2socks-linux-amd64.zip
+          unzip -o "$RUNNER_TEMP/t2s.zip" -d "$RUNNER_TEMP/tun2socks"
+          chmod +x "$RUNNER_TEMP/tun2socks/tun2socks-linux-amd64"
+          curl -sSL https://github.com/SagerNet/sing-box/releases/download/v1.14.0/sing-box-1.14.0-linux-amd64.tar.gz | tar xz -C "$RUNNER_TEMP"
+      - name: allow unprivileged namespaces
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          sudo modprobe tun || true
+      - name: build
+        run: zig build -Doptimize=ReleaseFast
+      - name: benchmark
+        env:
+          HEV: ${{ runner.temp }}/hev-socks5-tunnel/bin/hev-socks5-tunnel
+          TUN2SOCKS: ${{ runner.temp }}/tun2socks/tun2socks-linux-amd64
+          SINGBOX: ${{ runner.temp }}/sing-box-1.14.0-linux-amd64/sing-box
+          ENGINES: zeptun-userspace hev zeptun-hybrid singbox-system tun2socks singbox-gvisor
+          SCENARIOS: tcp-up-1 tcp-up-10 tcp-down-1 rr rr-8x1k crr crr-at-1300 udp udp-100k udp-gso-100k rr-bulk-1000 rr-bulk-4000
+          SOCKS_SERVER: ${{ runner.temp }}/hev-socks5-server/bin/hev-socks5-server
+          IPERF3: /usr/bin/iperf3
+          DURATION: 10
+          REPEAT: 3
+          OUT_DIR: bench-results
+        run: sh scripts/bench_netns.sh
+      - name: footprint
+        env:
+          HEV: ${{ runner.temp }}/hev-socks5-tunnel/bin/hev-socks5-tunnel
+          TUN2SOCKS: ${{ runner.temp }}/tun2socks/tun2socks-linux-amd64
+          SINGBOX: ${{ runner.temp }}/sing-box-1.14.0-linux-amd64/sing-box
+          SOCKS_SERVER: ${{ runner.temp }}/hev-socks5-server/bin/hev-socks5-server
+          ENGINES: zeptun hev singbox-system singbox-gvisor tun2socks
+          OUT_DIR: footprint-results
+        run: sh scripts/footprint_netns.sh
+      - name: summary
+        if: always()
+        run: |
+          cat bench-results/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+          cat footprint-results/footprint.txt >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: netns-bench
+          path: |
+            bench-results
+            footprint-results

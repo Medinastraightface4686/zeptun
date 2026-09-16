@@ -1,0 +1,314 @@
+name: release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ZIG_VERSION: 0.16.0
+
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: pack source
+        run: |
+          name=zeptun-${GITHUB_REF_NAME}
+          mkdir -p "$name"
+          git ls-files | tar c -O -T- | tar x -C "$name"
+          git rev-parse --short HEAD > "$name/.rev-id"
+          tar cJf "$name.tar.xz" "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-source
+          path: zeptun-*.tar.xz
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64
+            target: x86_64-linux-musl
+          - name: i686
+            target: x86-linux-musl
+          - name: arm64
+            target: aarch64-linux-musl
+          - name: armv7hf
+            target: arm-linux-musleabihf
+          - name: armv7
+            target: arm-linux-musleabi
+          - name: armeb
+            target: armeb-linux-musleabi
+          - name: riscv64
+            target: riscv64-linux-musl
+          - name: loong64
+            target: loongarch64-linux-musl
+          - name: powerpc64le
+            target: powerpc64le-linux-musl
+          - name: powerpc
+            target: powerpc-linux-musleabi
+          - name: mips
+            target: mips-linux-musleabi
+          - name: mipsel
+            target: mipsel-linux-musleabi
+          - name: s390x
+            target: s390x-linux-musl
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast -Dstrip=true
+      - name: stage
+        run: |
+          mkdir -p out
+          cp zig-out/bin/zeptun out/zeptun-linux-${{ matrix.name }}
+          cp zig-out/lib/libzeptun.a out/libzeptun-linux-${{ matrix.name }}.a
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-linux-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build slices
+        run: |
+          zig build -Dtarget=x86_64-macos -Doptimize=ReleaseFast -Dstrip=true
+          cp zig-out/bin/zeptun zeptun-x86_64
+          zig build -Dtarget=aarch64-macos -Doptimize=ReleaseFast -Dstrip=true
+          cp zig-out/bin/zeptun zeptun-arm64
+      - name: merge universal
+        run: |
+          mkdir -p out
+          lipo -create -output out/zeptun-darwin-universal zeptun-x86_64 zeptun-arm64
+          lipo -info out/zeptun-darwin-universal
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-darwin
+          path: out/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x86_64
+            target: x86_64-windows-gnu
+          - name: arm64
+            target: aarch64-windows-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build
+        run: zig build -Dtarget=${{ matrix.target }} -Doptimize=ReleaseFast -Dstrip=true
+      - name: stage
+        run: |
+          mkdir -p zeptun-win-${{ matrix.name }}
+          cp zig-out/bin/zeptun.exe zeptun-win-${{ matrix.name }}/
+          cp conf/zeptun.toml zeptun-win-${{ matrix.name }}/
+          cp README.md LICENSE zeptun-win-${{ matrix.name }}/ 2> /dev/null || true
+          zip -r zeptun-windows-${{ matrix.name }}.zip zeptun-win-${{ matrix.name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-windows-${{ matrix.name }}
+          path: zeptun-windows-${{ matrix.name }}.zip
+          if-no-files-found: error
+
+  freebsd:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build
+        run: zig build -Dtarget=x86_64-freebsd -Doptimize=ReleaseFast -Dstrip=true
+      - name: stage
+        run: |
+          mkdir -p out
+          cp zig-out/bin/zeptun out/zeptun-freebsd-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-freebsd
+          path: out/*
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build libraries and jni
+        run: ANDROID_NDK_HOME=${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_ROOT} sh scripts/build_android.sh
+      - name: check 16 KB page alignment
+        run: |
+          for so in zig-out/android/jniLibs/*/libzeptun.so; do
+            align=$(readelf -lW "$so" | awk '$1 == "LOAD" { print $NF; exit }')
+            echo "$so $align"
+            [ "$align" = "0x4000" ]
+          done
+      - name: stage
+        run: |
+          mkdir -p out
+          cp include/zeptun.h zig-out/android/
+          (cd zig-out/android && zip -r ../../out/zeptun-android-jniLibs.zip jniLibs zeptun.h)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-android
+          path: out/*
+          if-no-files-found: error
+
+  apple:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ env.ZIG_VERSION }}
+      - name: build xcframework
+        run: sh scripts/make_xcframework.sh
+      - name: stage
+        run: |
+          mkdir -p out
+          zip -r out/Zeptun.xcframework.zip zig-out/Zeptun.xcframework
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zeptun-apple
+          path: out/*
+          if-no-files-found: error
+
+  docker:
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - linux/amd64
+          - linux/arm64
+          - linux/riscv64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY@L}" >> $GITHUB_OUTPUT
+      - name: platform pair
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: ${{ matrix.platform }}
+          provenance: false
+          outputs: type=image,name=ghcr.io/${{ steps.repo.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
+      - name: export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+
+  docker-merge:
+    runs-on: ubuntu-24.04
+    needs: docker
+    permissions:
+      packages: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - name: repository name
+        id: repo
+        run: echo "name=${GITHUB_REPOSITORY@L}" >> $GITHUB_OUTPUT
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ steps.repo.outputs.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+      - name: create manifest list
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf 'ghcr.io/${{ steps.repo.outputs.name }}@sha256:%s ' *)
+      - name: inspect
+        run: docker buildx imagetools inspect ghcr.io/${{ steps.repo.outputs.name }}:${{ steps.meta.outputs.version }}
+
+  publish:
+    runs-on: ubuntu-24.04
+    needs: [source, linux, macos, windows, freebsd, android, apple]
+    if: github.event_name == 'release'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          pattern: zeptun-*
+          merge-multiple: true
+      - name: checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS
+      - name: upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd release
+          for file in *; do
+            gh release upload "${GITHUB_REF_NAME}" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+          done
