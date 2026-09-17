@@ -9,8 +9,8 @@
 extern "C" {
 #endif
 
-#define ZEPTUN_VERSION_MAJOR 0
-#define ZEPTUN_VERSION_MINOR 1
+#define ZEPTUN_VERSION_MAJOR 1
+#define ZEPTUN_VERSION_MINOR 0
 #define ZEPTUN_VERSION_PATCH 0
 
 #define ZEPTUN_OK 0

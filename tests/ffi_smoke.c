@@ -120,8 +120,9 @@ int main(void) {
     ZeptunConfig cfg;
     if (zeptun_config_init(&cfg, ZEPTUN_PRESET_MOBILE) != ZEPTUN_OK) return 12;
     cfg.device_kind = ZEPTUN_DEVICE_EXTERNAL;
-    cfg.handler_kind = ZEPTUN_HANDLER_DIRECT;
+    cfg.handler_kind = ZEPTUN_HANDLER_SOCKS5;
     cfg.log_level = ZEPTUN_LOG_WARN;
+    snprintf(cfg.socks5_server, sizeof cfg.socks5_server, "127.0.0.1:1");
     Zeptun *tun = NULL;
     int rc = zeptun_create(&cfg, &tun);
     if (rc != ZEPTUN_OK || tun == NULL) {

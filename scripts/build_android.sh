@@ -25,8 +25,13 @@ trap 'rm -f "$ROOT/jni"' EXIT
     NDK_APPLICATION_MK="$ROOT/Application.mk" \
     APP_BUILD_SCRIPT="$ROOT/Android.mk" \
     APP_ABI="$ABIS" \
-    NDK_LIBS_OUT="$OUT/jniLibs" \
-    NDK_OUT="$ROOT/zig-out/android/obj" \
+    NDK_LIBS_OUT="$OUT/ndk-libs" \
+    NDK_OUT="$OUT/ndk-obj" \
     -j"$(nproc 2> /dev/null || echo 4)"
+
+for abi in $ABIS; do
+    mkdir -p "$OUT/jniLibs/$abi"
+    cp "$OUT/ndk-libs/$abi/libzeptun-jni.so" "$OUT/jniLibs/$abi/"
+done
 
 printf 'zeptun: jniLibs ready in %s\n' "$OUT/jniLibs"

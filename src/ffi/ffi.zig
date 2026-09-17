@@ -25,8 +25,8 @@ fn rawPanic(msg: []const u8, ra: ?usize) noreturn {
     @trap();
 }
 
-pub const version_major = 0;
-pub const version_minor = 1;
+pub const version_major = 1;
+pub const version_minor = 0;
 pub const version_patch = 0;
 
 pub const Packet = external.Packet;

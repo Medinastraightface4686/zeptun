@@ -120,6 +120,7 @@ jobs:
             printf '\n'
             cat footprint-results/footprint.txt 2> /dev/null || true
           } > docs/bench/README.md
+          python3 scripts/wiki_benchmarks.py docs/bench/README.md docs/wiki/Benchmarks.md
         env:
           DURATION: ${{ inputs.duration || '10' }}
           REPEAT: ${{ inputs.repeat || '3' }}
@@ -146,6 +147,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/bench
-          git diff --cached --quiet || git commit -m "benchmark results from the runner"
-          git push
+          git add docs/bench docs/wiki/Benchmarks.md
+          git diff --cached --quiet && exit 0
+          git commit -m "benchmark results from the runner"
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push origin HEAD:main && exit 0
+            sleep 5
+          done
+          exit 1

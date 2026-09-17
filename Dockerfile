@@ -1,6 +1,8 @@
-FROM alpine:3.21 AS builder
+FROM --platform=$BUILDPLATFORM alpine:3.21 AS builder
 
 ARG ZIG_VERSION=0.16.0
+ARG TARGETARCH
+ARG TARGETVARIANT
 
 RUN apk add --update --no-cache curl xz tar
 
@@ -8,10 +10,7 @@ RUN set -eu; \
     case "$(uname -m)" in \
       x86_64) ZIG_ARCH=x86_64 ;; \
       aarch64) ZIG_ARCH=aarch64 ;; \
-      armv7l) ZIG_ARCH=armv7a ;; \
-      riscv64) ZIG_ARCH=riscv64 ;; \
-      i386|i686) ZIG_ARCH=x86 ;; \
-      *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;; \
+      *) echo "unsupported build host $(uname -m)" >&2; exit 1 ;; \
     esac; \
     curl -fsSL "https://ziglang.org/download/${ZIG_VERSION}/zig-${ZIG_ARCH}-linux-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz; \
     mkdir -p /opt/zig; \
@@ -22,7 +21,17 @@ RUN set -eu; \
 WORKDIR /src
 COPY . /src
 
-RUN zig build -Doptimize=ReleaseFast
+RUN set -eu; \
+    arch="${TARGETARCH:-$(uname -m)}"; \
+    case "${arch}${TARGETVARIANT:+/$TARGETVARIANT}" in \
+      amd64 | x86_64) TARGET=x86_64-linux-musl ;; \
+      arm64 | arm64/v8 | aarch64) TARGET=aarch64-linux-musl ;; \
+      riscv64) TARGET=riscv64-linux-musl ;; \
+      arm/v7) TARGET=arm-linux-musleabihf ;; \
+      386) TARGET=x86-linux-musl ;; \
+      *) echo "unsupported target ${arch}" >&2; exit 1 ;; \
+    esac; \
+    zig build -Dtarget="$TARGET" -Doptimize=ReleaseFast -Dstrip=true
 
 FROM alpine:3.21
 LABEL org.opencontainers.image.source="https://github.com/noisemux/zeptun"
