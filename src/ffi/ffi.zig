@@ -404,6 +404,6 @@ test "ffi config roundtrip" {
     try std.testing.expectEqual(config.StackMode.userspace, z.stack.mode);
     try std.testing.expectEqual(@as(u32, 1200), z.stack.max_tcp_sessions);
     try std.testing.expectEqualStrings("172.19.0.1/30", cstr(&c.address4));
-    try std.testing.expect(zeptun_version() == 0x000100);
+    try std.testing.expect(zeptun_version() == 0x010000);
     try std.testing.expectEqualStrings("timeout", std.mem.span(zeptun_strerror(-15)));
 }
