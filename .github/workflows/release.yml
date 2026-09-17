@@ -1,8 +1,9 @@
 name: release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 concurrency:
@@ -243,17 +244,17 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           provenance: false
-          outputs: type=image,name=ghcr.io/${{ steps.repo.outputs.name }},push-by-digest=true,name-canonical=true,push=${{ github.event_name == 'release' }}
+          outputs: type=image,name=ghcr.io/${{ steps.repo.outputs.name }},push-by-digest=true,name-canonical=true,push=${{ startsWith(github.ref, 'refs/tags/v') }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
       - name: export digest
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           mkdir -p /tmp/digests
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
       - uses: actions/upload-artifact@v7
-        if: github.event_name == 'release'
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
           path: /tmp/digests/*
@@ -262,7 +263,7 @@ jobs:
   docker-merge:
     runs-on: ubuntu-24.04
     needs: docker
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       packages: write
       contents: read
@@ -288,7 +289,7 @@ jobs:
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
       - name: create manifest list
         working-directory: /tmp/digests
         run: |
@@ -300,7 +301,7 @@ jobs:
   publish:
     runs-on: ubuntu-24.04
     needs: [source, linux, macos, windows, freebsd, android, apple]
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
@@ -313,11 +314,30 @@ jobs:
         run: |
           cd release
           sha256sum * > SHA256SUMS
-      - name: upload
+      - name: release notes from the tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.sha')
+          kind=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME" --jq '.object.type')
+          if [ "$kind" = "tag" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/tags/$sha" --jq '.message' > notes.md
+          else
+            : > notes.md
+          fi
+          wc -c notes.md
+      - name: create release and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            if [ -s notes.md ]; then
+              gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Zeptun ${GITHUB_REF_NAME#v}" --notes-file notes.md
+            else
+              gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Zeptun ${GITHUB_REF_NAME#v}" --generate-notes
+            fi
+          fi
           cd release
           for file in *; do
-            gh release upload "${GITHUB_REF_NAME}" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY" --clobber
           done
