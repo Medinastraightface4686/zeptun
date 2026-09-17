@@ -4,78 +4,78 @@
 <text x="16" y="42" font-size="12" fill="#64748b">median of the repeats, all engine threads &#183; lower is better</text>
 <text x="16" y="68" font-size="12" font-weight="600" fill="#334155">tcp-up-1</text>
 <text x="142" y="70" text-anchor="end" font-size="12" fill="#475569">zeptun-hybrid</text>
-<rect x="150" y="56" width="317" height="16" rx="3" fill="#2563eb"/>
-<text x="475" y="70" font-size="12" fill="#0f172a">63.95 %</text>
+<rect x="150" y="56" width="236" height="16" rx="3" fill="#2563eb"/>
+<text x="394" y="70" font-size="12" fill="#0f172a">99.50 %</text>
 <text x="142" y="94" text-anchor="end" font-size="12" fill="#475569">zeptun-userspace</text>
-<rect x="150" y="80" width="332" height="16" rx="3" fill="#64748b"/>
-<text x="490" y="94" font-size="12" fill="#0f172a">67.00 %</text>
+<rect x="150" y="80" width="222" height="16" rx="3" fill="#64748b"/>
+<text x="380" y="94" font-size="12" fill="#0f172a">93.60 %</text>
 <text x="142" y="118" text-anchor="end" font-size="12" fill="#475569">hev</text>
-<rect x="150" y="104" width="465" height="16" rx="3" fill="#0f766e"/>
-<text x="623" y="118" font-size="12" fill="#0f172a">93.85 %</text>
+<rect x="150" y="104" width="209" height="16" rx="3" fill="#0f766e"/>
+<text x="367" y="118" font-size="12" fill="#0f172a">88.30 %</text>
 <text x="142" y="142" text-anchor="end" font-size="12" fill="#475569">singbox-gvisor</text>
-<rect x="150" y="128" width="540" height="16" rx="3" fill="#b45309"/>
-<text x="698" y="142" font-size="12" fill="#0f172a">109 %</text>
+<rect x="150" y="128" width="390" height="16" rx="3" fill="#b45309"/>
+<text x="548" y="142" font-size="12" fill="#0f172a">164 %</text>
 <text x="142" y="166" text-anchor="end" font-size="12" fill="#475569">singbox-system</text>
-<rect x="150" y="152" width="508" height="16" rx="3" fill="#7c3aed"/>
-<text x="666" y="166" font-size="12" fill="#0f172a">103 %</text>
+<rect x="150" y="152" width="346" height="16" rx="3" fill="#7c3aed"/>
+<text x="504" y="166" font-size="12" fill="#0f172a">146 %</text>
 <text x="142" y="190" text-anchor="end" font-size="12" fill="#475569">tun2socks</text>
-<rect x="150" y="176" width="585" height="16" rx="3" fill="#be123c"/>
-<text x="743" y="190" font-size="12" fill="#0f172a">118 %</text>
+<rect x="150" y="176" width="492" height="16" rx="3" fill="#be123c"/>
+<text x="650" y="190" font-size="12" fill="#0f172a">207 %</text>
 <text x="16" y="230" font-size="12" font-weight="600" fill="#334155">tcp-up-10</text>
 <text x="142" y="232" text-anchor="end" font-size="12" fill="#475569">zeptun-hybrid</text>
-<rect x="150" y="218" width="369" height="16" rx="3" fill="#2563eb"/>
-<text x="527" y="232" font-size="12" fill="#0f172a">74.60 %</text>
+<rect x="150" y="218" width="445" height="16" rx="3" fill="#2563eb"/>
+<text x="603" y="232" font-size="12" fill="#0f172a">187 %</text>
 <text x="142" y="256" text-anchor="end" font-size="12" fill="#475569">zeptun-userspace</text>
-<rect x="150" y="242" width="309" height="16" rx="3" fill="#64748b"/>
-<text x="467" y="256" font-size="12" fill="#0f172a">62.45 %</text>
+<rect x="150" y="242" width="250" height="16" rx="3" fill="#64748b"/>
+<text x="408" y="256" font-size="12" fill="#0f172a">106 %</text>
 <text x="142" y="280" text-anchor="end" font-size="12" fill="#475569">hev</text>
-<rect x="150" y="266" width="560" height="16" rx="3" fill="#0f766e"/>
-<text x="718" y="280" font-size="12" fill="#0f172a">113 %</text>
+<rect x="150" y="266" width="508" height="16" rx="3" fill="#0f766e"/>
+<text x="666" y="280" font-size="12" fill="#0f172a">214 %</text>
 <text x="142" y="304" text-anchor="end" font-size="12" fill="#475569">singbox-gvisor</text>
-<rect x="150" y="290" width="517" height="16" rx="3" fill="#b45309"/>
-<text x="675" y="304" font-size="12" fill="#0f172a">104 %</text>
+<rect x="150" y="290" width="514" height="16" rx="3" fill="#b45309"/>
+<text x="672" y="304" font-size="12" fill="#0f172a">216 %</text>
 <text x="142" y="328" text-anchor="end" font-size="12" fill="#475569">singbox-system</text>
-<rect x="150" y="314" width="586" height="16" rx="3" fill="#7c3aed"/>
-<text x="744" y="328" font-size="12" fill="#0f172a">118 %</text>
+<rect x="150" y="314" width="389" height="16" rx="3" fill="#7c3aed"/>
+<text x="547" y="328" font-size="12" fill="#0f172a">164 %</text>
 <text x="142" y="352" text-anchor="end" font-size="12" fill="#475569">tun2socks</text>
 <rect x="150" y="338" width="680" height="16" rx="3" fill="#be123c"/>
-<text x="838" y="352" font-size="12" fill="#0f172a">137 %</text>
+<text x="838" y="352" font-size="12" fill="#0f172a">286 %</text>
 <text x="16" y="392" font-size="12" font-weight="600" fill="#334155">tcp-down-1</text>
 <text x="142" y="394" text-anchor="end" font-size="12" fill="#475569">zeptun-hybrid</text>
-<rect x="150" y="380" width="458" height="16" rx="3" fill="#2563eb"/>
-<text x="616" y="394" font-size="12" fill="#0f172a">92.55 %</text>
+<rect x="150" y="380" width="236" height="16" rx="3" fill="#2563eb"/>
+<text x="394" y="394" font-size="12" fill="#0f172a">99.60 %</text>
 <text x="142" y="418" text-anchor="end" font-size="12" fill="#475569">zeptun-userspace</text>
-<rect x="150" y="404" width="446" height="16" rx="3" fill="#64748b"/>
-<text x="604" y="418" font-size="12" fill="#0f172a">90.10 %</text>
+<rect x="150" y="404" width="236" height="16" rx="3" fill="#64748b"/>
+<text x="394" y="418" font-size="12" fill="#0f172a">99.50 %</text>
 <text x="142" y="442" text-anchor="end" font-size="12" fill="#475569">hev</text>
-<rect x="150" y="428" width="411" height="16" rx="3" fill="#0f766e"/>
-<text x="569" y="442" font-size="12" fill="#0f172a">83.05 %</text>
+<rect x="150" y="428" width="227" height="16" rx="3" fill="#0f766e"/>
+<text x="385" y="442" font-size="12" fill="#0f172a">95.80 %</text>
 <text x="142" y="466" text-anchor="end" font-size="12" fill="#475569">singbox-gvisor</text>
-<rect x="150" y="452" width="617" height="16" rx="3" fill="#b45309"/>
-<text x="775" y="466" font-size="12" fill="#0f172a">125 %</text>
+<rect x="150" y="452" width="426" height="16" rx="3" fill="#b45309"/>
+<text x="584" y="466" font-size="12" fill="#0f172a">180 %</text>
 <text x="142" y="490" text-anchor="end" font-size="12" fill="#475569">singbox-system</text>
-<rect x="150" y="476" width="636" height="16" rx="3" fill="#7c3aed"/>
-<text x="794" y="490" font-size="12" fill="#0f172a">128 %</text>
+<rect x="150" y="476" width="340" height="16" rx="3" fill="#7c3aed"/>
+<text x="498" y="490" font-size="12" fill="#0f172a">143 %</text>
 <text x="142" y="514" text-anchor="end" font-size="12" fill="#475569">tun2socks</text>
-<rect x="150" y="500" width="608" height="16" rx="3" fill="#be123c"/>
-<text x="766" y="514" font-size="12" fill="#0f172a">123 %</text>
+<rect x="150" y="500" width="384" height="16" rx="3" fill="#be123c"/>
+<text x="542" y="514" font-size="12" fill="#0f172a">162 %</text>
 <text x="16" y="554" font-size="12" font-weight="600" fill="#334155">tcp-down-10</text>
 <text x="142" y="556" text-anchor="end" font-size="12" fill="#475569">zeptun-hybrid</text>
-<rect x="150" y="542" width="487" height="16" rx="3" fill="#2563eb"/>
-<text x="645" y="556" font-size="12" fill="#0f172a">98.30 %</text>
+<rect x="150" y="542" width="470" height="16" rx="3" fill="#2563eb"/>
+<text x="628" y="556" font-size="12" fill="#0f172a">198 %</text>
 <text x="142" y="580" text-anchor="end" font-size="12" fill="#475569">zeptun-userspace</text>
-<rect x="150" y="566" width="430" height="16" rx="3" fill="#64748b"/>
-<text x="588" y="580" font-size="12" fill="#0f172a">86.85 %</text>
+<rect x="150" y="566" width="234" height="16" rx="3" fill="#64748b"/>
+<text x="392" y="580" font-size="12" fill="#0f172a">98.80 %</text>
 <text x="142" y="604" text-anchor="end" font-size="12" fill="#475569">hev</text>
-<rect x="150" y="590" width="536" height="16" rx="3" fill="#0f766e"/>
-<text x="694" y="604" font-size="12" fill="#0f172a">108 %</text>
+<rect x="150" y="590" width="491" height="16" rx="3" fill="#0f766e"/>
+<text x="649" y="604" font-size="12" fill="#0f172a">207 %</text>
 <text x="142" y="628" text-anchor="end" font-size="12" fill="#475569">singbox-gvisor</text>
-<rect x="150" y="614" width="645" height="16" rx="3" fill="#b45309"/>
-<text x="803" y="628" font-size="12" fill="#0f172a">130 %</text>
+<rect x="150" y="614" width="610" height="16" rx="3" fill="#b45309"/>
+<text x="768" y="628" font-size="12" fill="#0f172a">257 %</text>
 <text x="142" y="652" text-anchor="end" font-size="12" fill="#475569">singbox-system</text>
-<rect x="150" y="638" width="567" height="16" rx="3" fill="#7c3aed"/>
-<text x="725" y="652" font-size="12" fill="#0f172a">114 %</text>
+<rect x="150" y="638" width="309" height="16" rx="3" fill="#7c3aed"/>
+<text x="467" y="652" font-size="12" fill="#0f172a">130 %</text>
 <text x="142" y="676" text-anchor="end" font-size="12" fill="#475569">tun2socks</text>
-<rect x="150" y="662" width="627" height="16" rx="3" fill="#be123c"/>
-<text x="785" y="676" font-size="12" fill="#0f172a">127 %</text>
+<rect x="150" y="662" width="630" height="16" rx="3" fill="#be123c"/>
+<text x="788" y="676" font-size="12" fill="#0f172a">265 %</text>
 </svg>
