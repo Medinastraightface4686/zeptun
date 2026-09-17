@@ -64,7 +64,7 @@ Every number here is produced by the `benchmark` workflow in the repository, on 
 ## Reproducing
 
 ```sh
-gh workflow run benchmark.yml --repo Noisemux/zeptun -f duration=10 -f repeat=3
+gh workflow run benchmark.yml --repo Noisemux/zeptun -f duration=8 -f repeat=2
 ```
 """
 

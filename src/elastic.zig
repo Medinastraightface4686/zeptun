@@ -49,12 +49,13 @@ pub const Sample = struct {
     total: u32,
     idle: ?u32,
     rate: u64,
+    flows: u32 = 2,
 };
 
 pub const Policy = struct {
-    spare: u32 = 900,
-    spare_after_gain: u32 = 150,
-    high: u32 = 800,
+    spare: u32 = 200,
+    spare_after_gain: u32 = 100,
+    high: u32 = 700,
     low: u32 = 450,
     grow_after: u8 = 4,
     shrink_after: u8 = 16,
@@ -79,6 +80,8 @@ pub const Policy = struct {
     keep_until: u64 = 0,
     gain_milli: u64 = 0,
     momentum: bool = false,
+    probe_flows: u32 = 0,
+    failed_flows: u32 = 0,
 
     fn baseline(p: *const Policy) u64 {
         const n = @min(p.rate_count, p.rates.len);
@@ -107,6 +110,7 @@ pub const Policy = struct {
                 return .none;
             }
             p.momentum = false;
+            p.failed_flows = p.probe_flows;
             p.backoff_ms = std.math.clamp(p.backoff_ms * 2, p.backoff_min_ms, p.backoff_max_ms);
             p.retry_at = s.now_ms + p.backoff_ms;
             return .shrink;
@@ -114,13 +118,19 @@ pub const Policy = struct {
         p.rates[p.rate_count % p.rates.len] = s.rate;
         p.rate_count +%= 1;
         const spare_ok = if (s.idle) |idle| idle >= (if (p.momentum) p.spare_after_gain else p.spare) else true;
-        const hot = s.attached < s.max and s.busiest >= p.high and spare_ok;
+        const hot = s.attached < s.max and s.busiest >= p.high and s.flows >= 2 and spare_ok;
         p.hot = if (hot) p.hot +| 1 else 0;
+        const workload_changed = p.failed_flows != 0 and s.flows >= p.failed_flows * 2;
         const cold = s.attached > 1 and s.total <= @as(u32, s.attached - 1) * p.low;
         p.cold = if (cold) p.cold +| 1 else 0;
         if (cold) p.momentum = false;
-        if (p.hot >= p.grow_after and s.now_ms >= p.retry_at) {
+        if (p.hot >= p.grow_after and (s.now_ms >= p.retry_at or workload_changed)) {
+            if (workload_changed) {
+                p.backoff_ms = 0;
+                p.failed_flows = 0;
+            }
             p.probing = true;
+            p.probe_flows = s.flows;
             p.probe_at = s.now_ms;
             p.probe_base = p.baseline();
             p.probe_sum = 0;
@@ -275,7 +285,7 @@ test "policy keeps a queue only when throughput grows" {
     d = .none;
     while (ticks < 20) : (ticks += 1) {
         now += tick_ms;
-        d = p.step(.{ .now_ms = now, .attached = 2, .max = 4, .busiest = 700, .total = 1400, .idle = 1000, .rate = 1700 });
+        d = p.step(.{ .now_ms = now, .attached = 2, .max = 4, .busiest = 600, .total = 1200, .idle = 1000, .rate = 1700 });
         try std.testing.expectEqual(Decision.none, d);
     }
     try std.testing.expect(!p.probing);
@@ -295,7 +305,7 @@ test "policy needs spare cpus and sheds idle queues" {
     var ticks: u32 = 0;
     while (ticks < 40) : (ticks += 1) {
         now += tick_ms;
-        try std.testing.expectEqual(Decision.none, p.step(.{ .now_ms = now, .attached = 1, .max = 4, .busiest = 990, .total = 990, .idle = 400, .rate = 1000 }));
+        try std.testing.expectEqual(Decision.none, p.step(.{ .now_ms = now, .attached = 1, .max = 4, .busiest = 990, .total = 990, .idle = 100, .rate = 1000 }));
     }
     ticks = 0;
     var d: Decision = .none;
@@ -305,6 +315,49 @@ test "policy needs spare cpus and sheds idle queues" {
     }
     try std.testing.expectEqual(Decision.shrink, d);
     try std.testing.expectEqual(@as(u32, 16), ticks);
+}
+
+test "policy never probes a single flow" {
+    var p: Policy = .{};
+    var now: u64 = 0;
+    var ticks: u32 = 0;
+    while (ticks < 40) : (ticks += 1) {
+        now += tick_ms;
+        try std.testing.expectEqual(Decision.none, p.step(.{ .now_ms = now, .attached = 1, .max = 4, .busiest = 990, .total = 990, .idle = 3000, .rate = 1000, .flows = 1 }));
+    }
+}
+
+test "policy probes again when the flow count doubles" {
+    var p: Policy = .{};
+    var now: u64 = 0;
+    var d: Decision = .none;
+    var ticks: u32 = 0;
+    while (ticks < 8 and d == .none) : (ticks += 1) {
+        now += tick_ms;
+        d = p.step(.{ .now_ms = now, .attached = 1, .max = 4, .busiest = 990, .total = 990, .idle = 3000, .rate = 1000, .flows = 2 });
+    }
+    try std.testing.expectEqual(Decision.grow, d);
+    d = .none;
+    ticks = 0;
+    while (ticks < 20 and d == .none) : (ticks += 1) {
+        now += tick_ms;
+        d = p.step(.{ .now_ms = now, .attached = 2, .max = 4, .busiest = 600, .total = 1200, .idle = 3000, .rate = 1000, .flows = 2 });
+    }
+    try std.testing.expectEqual(Decision.shrink, d);
+    try std.testing.expect(p.retry_at > now + tick_ms * 8);
+    ticks = 0;
+    while (ticks < 6) : (ticks += 1) {
+        now += tick_ms;
+        try std.testing.expectEqual(Decision.none, p.step(.{ .now_ms = now, .attached = 1, .max = 4, .busiest = 990, .total = 990, .idle = 3000, .rate = 1000, .flows = 2 }));
+    }
+    d = .none;
+    ticks = 0;
+    while (ticks < 8 and d == .none) : (ticks += 1) {
+        now += tick_ms;
+        d = p.step(.{ .now_ms = now, .attached = 1, .max = 4, .busiest = 990, .total = 990, .idle = 3000, .rate = 1000, .flows = 10 });
+    }
+    try std.testing.expectEqual(Decision.grow, d);
+    try std.testing.expect(now < p.retry_at);
 }
 
 test "rotation walks up and down" {

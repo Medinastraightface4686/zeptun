@@ -993,6 +993,7 @@ pub const Engine = struct {
         const moved_bytes = bytes -% el.last_bytes;
         el.last_bytes = bytes;
         var busiest: u32 = 0;
+        var busiest_flows: u32 = 0;
         var total: u32 = 0;
         var i: u16 = 0;
         while (i < live) : (i += 1) {
@@ -1002,18 +1003,22 @@ pub const Engine = struct {
             const util: u32 = if (!primed or prev == 0 or cpu < prev or dt == 0) 0 else @intCast(@min((cpu - prev) * 1000 / dt, 1000));
             el.util[i].store(@intCast(util), .release);
             if (i < attached and el.roles[i].load(.acquire) == .active) {
-                busiest = @max(busiest, util);
+                if (util >= busiest) {
+                    busiest = util;
+                    const c = &e.counters[i];
+                    busiest_flows = @intCast(@min(c.get(.tcp_active) +| c.get(.udp_active), std.math.maxInt(u32)));
+                }
                 total += util;
             }
         }
         if (!primed or dt < 50 * std.time.ns_per_ms) return;
         const idle = if (el.mode == .rotate or busiest >= el.policy.high) el.stat.idleMilli(el.cpus) else null;
         const rate = moved_bytes * std.time.ns_per_s / dt;
-        log.debug("elastic: attached {d} busiest {d} total {d} idle {?d} rate {d}", .{ attached, busiest, total, idle, rate });
+        log.debug("elastic: attached {d} busiest {d} flows {d} total {d} idle {?d} rate {d}", .{ attached, busiest, busiest_flows, total, idle, rate });
         const probing = el.policy.probing;
         const decision = switch (el.mode) {
             .rotate => el.rotation.step(now_ms, attached, el.cap),
-            else => el.policy.step(.{ .now_ms = now_ms, .attached = attached, .max = el.cap, .busiest = busiest, .total = total, .idle = idle, .rate = rate }),
+            else => el.policy.step(.{ .now_ms = now_ms, .attached = attached, .max = el.cap, .busiest = busiest, .total = total, .idle = idle, .rate = rate, .flows = busiest_flows }),
         };
         if (probing and !el.policy.probing) {
             const gain: i64 = @as(i64, @intCast(@min(el.policy.gain_milli, 100_000))) - 1000;
