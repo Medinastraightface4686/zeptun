@@ -236,6 +236,16 @@ pub fn UdpState(comptime W: type) type {
     };
 }
 
+const warm_backoff_min_ms: u32 = 1000;
+const warm_backoff_max_ms: u32 = 30_000;
+
+fn proxyRefused(e: sys.Errno) bool {
+    return switch (e) {
+        .connrefused, .connreset, .connaborted, .timedout, .pipe, .nobufs, .hostunreach, .netunreach, .netdown => true,
+        else => false,
+    };
+}
+
 pub fn Handler(comptime W: type) type {
     return struct {
         const Self = @This();
@@ -260,6 +270,7 @@ pub fn Handler(comptime W: type) type {
         warm_ready: [2]u16 = .{ 0, 0 },
         warm_pending: [2]u16 = .{ 0, 0 },
         warm_backoff: u64 = 0,
+        warm_backoff_ms: u32 = 0,
         demand: [2]Demand = .{ .{}, .{} },
         stopping: bool = false,
         fake: ?*dns.Table = null,
@@ -578,6 +589,20 @@ pub fn Handler(comptime W: type) type {
             return null;
         }
 
+        fn proxyBusy(h: *Self, w: *W) void {
+            if (!build_options.enable_socks5) return;
+            const next = if (h.warm_backoff_ms == 0) warm_backoff_min_ms else @min(h.warm_backoff_ms * 2, warm_backoff_max_ms);
+            h.warm_backoff_ms = next;
+            h.warm_backoff = w.now() + next;
+            for (h.warm) |*s| {
+                if (s.state == .ready) h.dropWarm(w, s, false);
+            }
+        }
+
+        fn proxyHealthy(h: *Self) void {
+            h.warm_backoff_ms = 0;
+        }
+
         fn startWarm(h: *Self, w: *W, kind: WarmKind) bool {
             const slot = for (h.warm) |*s| {
                 if (s.state == .free and !s.c.isActive()) break s;
@@ -585,7 +610,7 @@ pub fn Handler(comptime W: type) type {
             const server = h.cfg.handler.socks5.server;
             var fd: sys.fd_t = sys.invalid_fd;
             if (h.openSocket(w, server.addr.family, &fd) != .success) {
-                h.warm_backoff = w.now() + 1000;
+                h.proxyBusy(w);
                 return false;
             }
             slot.* = .{ .fd = fd, .kind = kind, .state = .connecting, .sa = sys.Sockaddr.fromEndpoint(server) };
@@ -615,7 +640,7 @@ pub fn Handler(comptime W: type) type {
             s.fd = sys.invalid_fd;
             s.udp_fd = sys.invalid_fd;
             s.state = .free;
-            if (failed) h.warm_backoff = w.now() + 1000;
+            if (failed) h.proxyBusy(w);
         }
 
         pub fn onWarmExpire(h: *Self, w: *W, s: *Wc) void {
@@ -642,6 +667,7 @@ pub fn Handler(comptime W: type) type {
         }
 
         fn warmReady(h: *Self, s: *Wc) io.Disposition {
+            h.proxyHealthy();
             const k = @intFromEnum(s.kind);
             s.state = .ready;
             h.warm_pending[k] -= 1;
@@ -816,6 +842,7 @@ pub fn Handler(comptime W: type) type {
         }
 
         fn finish(h: *Self, w: *W, d: *D, result: sys.Errno) void {
+            if (result == .success) h.proxyHealthy();
             const held = d.buf;
             if (held) |b| w.wheel.cancel(&b.timer);
             if (d.pooled and d.owner != .udp and !h.stopping) h.refill(w);
@@ -851,6 +878,7 @@ pub fn Handler(comptime W: type) type {
             if (result < 0) {
                 const e = sys.toErrno(result);
                 if ((e == .again or e == .intr) and d.phase != .connecting) return .rearm;
+                if (h.socksMode() and !d.bypass and proxyRefused(e)) h.proxyBusy(w);
                 if (h.canRetry(d)) return h.retryFresh(w, d);
                 h.finish(w, d, e);
                 return .disarm;
@@ -918,7 +946,7 @@ pub fn Handler(comptime W: type) type {
             d.early_sent = 0;
             d.rlen = 0;
             d.rparsed = 0;
-            h.warm_backoff = w.now() + 1000;
+            h.proxyBusy(w);
             const e = h.openFresh(w, d);
             if (e != .success) {
                 h.finish(w, d, e);

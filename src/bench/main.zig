@@ -20,7 +20,7 @@ const usage =
     \\  conns --connect ADDR:PORT [--count N] [--hold-ms N] [--json F]
     \\  udp-flows --connect ADDR:PORT [--count N] [--hold-ms N] [--json F]
     \\  verify --connect ADDR:PORT [--bytes N] [--seed N] [--json F]
-    \\  socks5-server --listen ADDR:PORT [--map-host ADDR] [--user U --pass P]
+    \\  socks5-server --listen ADDR:PORT [--map-host ADDR] [--user U --pass P] [--max-clients N]
     \\  dns-client --server ADDR:PORT --name NAME [--type A|AAAA] [--count N] [--expect ADDR] [--json F]
     \\  monitor --pid PID [--seconds S] [--interval-ms N] [--json F]
     \\  replay --pcap FILE [--loops N] [--json F]
@@ -151,6 +151,7 @@ pub fn main(init: std.process.Init) !u8 {
         try socks5_server.run(.{
             .listen = try a.endpoint("--listen"),
             .map_host = if (a.value("--map-host")) |m| addr.Address.parse(m) catch return error.InvalidArgument else null,
+            .max_clients = try a.int(u32, "--max-clients", 0),
             .username = a.value("--user") orelse "",
             .password = a.value("--pass") orelse "",
         });

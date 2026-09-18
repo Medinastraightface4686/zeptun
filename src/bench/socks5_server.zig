@@ -12,10 +12,13 @@ pub const Options = struct {
     map_host: ?addr.Address = null,
     username: []const u8 = "",
     password: []const u8 = "",
+    max_clients: u32 = 0,
 };
 
 const Server = struct {
     opts: Options,
+    live: std.atomic.Value(u32) = .init(0),
+    refused: std.atomic.Value(u32) = .init(0),
 };
 
 fn readFull(fd: i32, buf: []u8) bool {
@@ -46,7 +49,15 @@ pub fn run(opts: Options) !void {
     while (true) {
         const fd = sys.linuxResult(linux.accept4(lfd, null, null, linux.SOCK.CLOEXEC));
         if (fd < 0) continue;
+        if (opts.max_clients != 0 and server.live.load(.acquire) >= opts.max_clients) {
+            const refused = server.refused.fetchAdd(1, .monotonic) + 1;
+            if (refused % 16 == 1) std.debug.print("socks5-server: at the client limit, refused {d}\n", .{refused});
+            sys.close(fd);
+            continue;
+        }
+        _ = server.live.fetchAdd(1, .monotonic);
         const t = std.Thread.spawn(.{ .stack_size = 512 * 1024 }, session, .{ server, fd }) catch {
+            _ = server.live.fetchSub(1, .monotonic);
             sys.close(fd);
             continue;
         };
@@ -65,7 +76,10 @@ fn reply(fd: i32, code: u8, bound: addr.Endpoint) void {
 
 fn session(server: *Server, fd: i32) void {
     var keep = false;
-    defer if (!keep) sys.close(fd);
+    defer {
+        if (!keep) sys.close(fd);
+        _ = server.live.fetchSub(1, .monotonic);
+    }
     _ = sys.setsockoptInt(fd, linux.IPPROTO.TCP, linux.TCP.NODELAY, 1);
     var hdr: [2]u8 = undefined;
     if (!readFull(fd, &hdr) or hdr[0] != 5) return;
