@@ -4,6 +4,7 @@ const sys = @import("../io/sys.zig");
 const gso = @import("../packet/gso.zig");
 const pool = @import("../packet/pool.zig");
 const log = @import("../log.zig");
+const config = @import("../config.zig");
 const iphlp = @import("../route/windows.zig");
 
 const win = sys.windows;
@@ -14,6 +15,7 @@ pub const supported = sys.is_windows;
 pub const OpenOptions = struct {
     name: []const u8,
     mtu: u32,
+    guid: ?config.Guid = null,
 };
 
 pub const ring_capacity: u32 = 0x80_0000;
@@ -109,7 +111,12 @@ pub const Adapter = struct {
         wide[wide_len] = 0;
         const api = try Api.load();
         errdefer api.unload();
-        const handle = api.open_adapter(&wide) orelse api.create_adapter(&wide, tunnel_type, null) orelse {
+        var guid: win.GUID = undefined;
+        const requested: ?*const win.GUID = if (options.guid) |g| blk: {
+            guid = .{ .Data1 = g.d1, .Data2 = g.d2, .Data3 = g.d3, .Data4 = g.d4 };
+            break :blk &guid;
+        } else null;
+        const handle = api.open_adapter(&wide) orelse api.create_adapter(&wide, tunnel_type, requested) orelse {
             const code = win.lastError();
             log.err("wintun: cannot open or create adapter {s} (error {d})", .{ options.name, code });
             return deviceError(code);

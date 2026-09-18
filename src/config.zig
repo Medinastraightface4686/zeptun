@@ -226,10 +226,39 @@ test "uid range exclusion" {
     try std.testing.expectEqual(UidRange{ .start = 5, .end = 9 }, try UidRange.parse("5-9"));
 }
 
+pub const Guid = extern struct {
+    d1: u32 = 0,
+    d2: u16 = 0,
+    d3: u16 = 0,
+    d4: [8]u8 = @splat(0),
+
+    pub fn parse(text: []const u8) !Guid {
+        var body = text;
+        if (body.len >= 2 and body[0] == '{' and body[body.len - 1] == '}') body = body[1 .. body.len - 1];
+        if (body.len != 36) return error.InvalidArgument;
+        for ([_]usize{ 8, 13, 18, 23 }) |i| {
+            if (body[i] != '-') return error.InvalidArgument;
+        }
+        var g: Guid = .{};
+        g.d1 = std.fmt.parseInt(u32, body[0..8], 16) catch return error.InvalidArgument;
+        g.d2 = std.fmt.parseInt(u16, body[9..13], 16) catch return error.InvalidArgument;
+        g.d3 = std.fmt.parseInt(u16, body[14..18], 16) catch return error.InvalidArgument;
+        var i: usize = 0;
+        while (i < 2) : (i += 1) {
+            g.d4[i] = std.fmt.parseInt(u8, body[19 + i * 2 ..][0..2], 16) catch return error.InvalidArgument;
+        }
+        while (i < 8) : (i += 1) {
+            g.d4[i] = std.fmt.parseInt(u8, body[24 + (i - 2) * 2 ..][0..2], 16) catch return error.InvalidArgument;
+        }
+        return g;
+    }
+};
+
 pub const DeviceConfig = struct {
     kind: DeviceKind = .tun,
     name: Name = .init("zeptun0"),
     netns: Name = .{},
+    guid: ?Guid = null,
     fd: i32 = -1,
     mtu: u32 = 1500,
     queues: u16 = 0,
@@ -515,4 +544,17 @@ test "presets validate" {
     try std.testing.expect(s.buffers_per_worker * 4096 <= 24 << 20);
     d.handler.kind = .socks5;
     try std.testing.expectError(error.InvalidArgument, d.validate());
+}
+
+test "guid parsing accepts both spellings" {
+    const plain = try Guid.parse("24198F4C-7895-434C-AD35-9E29A92DDC51");
+    const braced = try Guid.parse("{24198f4c-7895-434c-ad35-9e29a92ddc51}");
+    try std.testing.expectEqual(@as(u32, 0x24198F4C), plain.d1);
+    try std.testing.expectEqual(@as(u16, 0x7895), plain.d2);
+    try std.testing.expectEqual(@as(u16, 0x434C), plain.d3);
+    try std.testing.expectEqualSlices(u8, &[_]u8{ 0xAD, 0x35, 0x9E, 0x29, 0xA9, 0x2D, 0xDC, 0x51 }, &plain.d4);
+    try std.testing.expectEqual(plain.d1, braced.d1);
+    try std.testing.expectEqualSlices(u8, &plain.d4, &braced.d4);
+    try std.testing.expectError(error.InvalidArgument, Guid.parse("nope"));
+    try std.testing.expectError(error.InvalidArgument, Guid.parse("24198F4C78954 34C-AD35-9E29A92DDC51"));
 }

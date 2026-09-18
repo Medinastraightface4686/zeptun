@@ -79,6 +79,8 @@ Wintun is not modified, and its prebuilt binaries licence permits redistribution
 
 MSVC targets build as well: `-Dtarget=x86_64-windows-msvc`.
 
+The adapter GUID can be pinned so the device keeps one identity across reinstalls, which keeps its firewall profile and DNS settings and stops duplicate adapters from piling up: `--tun-guid "{24198F4C-7895-434C-AD35-9E29A92DDC51}"` on the command line, `guid` under `[tun]` in the configuration, or `zeptun_set_adapter_guid` from the C API. It is only used when the adapter is created; an existing adapter is opened as before.
+
 ## Container
 
 ```sh

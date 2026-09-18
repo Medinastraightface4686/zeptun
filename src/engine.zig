@@ -912,6 +912,10 @@ pub const Engine = struct {
         e.protect.android_ctx = ctx;
     }
 
+    pub fn setAdapterGuid(e: *Engine, text: []const u8) !void {
+        e.cfg.device.guid = try config.Guid.parse(text);
+    }
+
     pub fn setDeviceFd(e: *Engine, fd: sys.fd_t) void {
         e.cfg.device.fd = @intCast(fd);
     }
@@ -1134,6 +1138,7 @@ pub const Engine = struct {
                     .persist = cfg.device.persist,
                     .mtu = cfg.device.mtu,
                     .napi = cfg.device.napi,
+                    .guid = cfg.device.guid,
                 });
                 errdefer o.close();
                 workers = o.count;

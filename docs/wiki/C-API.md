@@ -41,6 +41,7 @@ zeptun_destroy(tun);
 | Function | Purpose |
 |---|---|
 | `zeptun_set_device_fd(tun, fd)` | adopt an existing TUN descriptor, as `VpnService` and `NEPacketTunnelProvider` hand out |
+| `zeptun_set_adapter_guid(tun, guid)` | pin the Wintun adapter GUID on Windows; it is only honoured when the adapter is created, so an existing adapter keeps its identity |
 | `zeptun_set_read_callback(tun, cb, ctx)` | receive the packets the engine sends to the client, in batches of up to 128 |
 | `zeptun_write_packet(tun, data, len)` | inject one packet |
 | `zeptun_write_packets(tun, packets, count)` | inject a batch |

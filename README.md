@@ -121,7 +121,7 @@ systemd_resolved = true
 | Section | Keys |
 |---|---|
 | top level | `preset` (`desktop`, `server`, `mobile`), `log_level`, `log_file`, `pid_file`, `stats_interval_s`, `post_up_script`, `pre_down_script` |
-| `[tun]` | `name`, `fd`, `mtu`, `queues`, `offload`, `multi_queue`, `persist`, `napi`, `jumbo`, `txqueuelen`, `configure`, `netns`, `address` |
+| `[tun]` | `name`, `fd`, `mtu`, `queues`, `offload`, `multi_queue`, `persist`, `napi`, `jumbo`, `txqueuelen`, `configure`, `netns`, `guid`, `address` |
 | `[stack]` | `mode` (`userspace`, `hybrid`, `system`), `tcp_rx_window`, `tcp_tx_buffer`, `tcp_mss_clamp`, `tcp_initial_cwnd`, `congestion`, `sack`, `timestamps`, `window_scaling`, `tcp_connect_timeout_ms`, `tcp_idle_timeout_ms`, `tcp_delayed_ack_ms`, `tcp_early_accept`, `udp_idle_timeout_ms`, `udp`, `udp_nat`, `icmp`, `max_tcp_sessions`, `max_udp_sessions`, `nat_port_base`, `nat_port_limit` |
 | `[handler]` | `kind` (`socks5`, `direct`, `passthrough`), `tcp_fastopen`, `preserve_dscp` |
 | `[handler.socks5]` | `server`, `username`, `password`, `udp`, `udp_mode` (`udp`, `tcp`), `udp_address`, `pipeline`, `optimistic_data`, `pool_size`, `pool_idle_ms` |
@@ -241,6 +241,7 @@ zeptun_destroy(tun);
 | `zeptun_stop(tun)` | stop the engine from any thread, including from a callback |
 | `zeptun_destroy(tun)` | join the workers, remove routes and free the engine |
 | `zeptun_set_device_fd(tun, fd)` | use an existing TUN file descriptor |
+| `zeptun_set_adapter_guid(tun, guid)` | pin the Wintun adapter GUID on Windows, so the adapter keeps one identity across reinstalls |
 | `zeptun_set_read_callback(tun, cb, ctx)` | receive the packets that leave the engine |
 | `zeptun_write_packets(tun, packets, count)` | inject packets into the engine |
 | `zeptun_set_protect_callback(tun, cb, ctx)` | approve every upstream socket before it connects |

@@ -190,6 +190,7 @@ int zeptun_set_passthrough_callback(Zeptun *tun, zeptun_packets_cb callback, voi
 int zeptun_set_protect_callback(Zeptun *tun, zeptun_protect_cb callback, void *ctx);
 int zeptun_set_flow_callback(Zeptun *tun, zeptun_flow_cb callback, void *ctx);
 int zeptun_set_device_fd(Zeptun *tun, int fd);
+int zeptun_set_adapter_guid(Zeptun *tun, const char *guid);
 
 int zeptun_start(Zeptun *tun);
 int zeptun_run(Zeptun *tun);

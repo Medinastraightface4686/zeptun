@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const build_options = @import("build_options");
 const sys = @import("../io/sys.zig");
+const config = @import("../config.zig");
 const gso = @import("../packet/gso.zig");
 const pool = @import("../packet/pool.zig");
 
@@ -151,6 +152,7 @@ pub const OpenOptions = struct {
     multi_queue: bool,
     persist: bool,
     napi: bool = false,
+    guid: ?config.Guid = null,
 };
 
 pub fn openTun(options: OpenOptions) !Opened {
@@ -194,7 +196,7 @@ pub fn openTun(options: OpenOptions) !Opened {
         return o;
     }
     if (wintun.supported) {
-        const a = try wintun.Adapter.open(.{ .name = options.name, .mtu = options.mtu });
+        const a = try wintun.Adapter.open(.{ .name = options.name, .mtu = options.mtu, .guid = options.guid });
         o.count = 1;
         o.caps = a.caps;
         o.name = a.shortName();

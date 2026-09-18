@@ -60,6 +60,7 @@ A preset sets the defaults; every key after it in the document wins.
 | `txqueuelen` | 1000 to 4096 | transmit queue length in packets |
 | `configure` | true | assign addresses and bring the link up |
 | `netns` | | name under `/run/netns` or a path; the interface is created there |
+| `guid` | | fixed GUID for the Wintun adapter on Windows, `{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}` or the same without braces; empty means the driver picks one |
 | `address` | one v4 and one v6 prefix | repeat for more addresses per family |
 
 ## `[stack]`

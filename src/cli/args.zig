@@ -22,6 +22,7 @@ pub const usage =
     \\  --tun NAME                 TUN interface name (default zeptun0)
     \\  --tun-fd FD                use an existing TUN file descriptor
     \\  --netns NAME               create the interface inside this network namespace
+    \\  --tun-guid GUID            fixed adapter GUID for the Wintun device (Windows)
     \\  --udp-nat MODE             endpoint-independent (default), address or address-port
     \\  --mtu N                    interface MTU (default 1500)
     \\  --queues N                 most queues and workers, 0 = automatic (one per CPU while elastic, else CPUs / 4)
@@ -211,6 +212,9 @@ pub fn parse(arena: std.mem.Allocator, raw_argv: []const []const u8) Error!Parse
                 .address_port
             else
                 return error.InvalidArgument;
+        } else if (std.mem.eql(u8, a, "--tun-guid")) {
+            const v = try Flag.value(argv, &i);
+            p.st.cfg.device.guid = config.Guid.parse(v) catch return error.InvalidArgument;
         } else if (std.mem.eql(u8, a, "--netns")) {
             const v = try Flag.value(argv, &i);
             p.st.cfg.device.netns = .init(v);
@@ -430,9 +434,10 @@ test "parse command line" {
 test "parse namespace and nat options" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
-    const argv = [_][]const u8{ "run", "--netns", "office", "--udp-nat", "address-port", "--systemd-resolved", "off" };
+    const argv = [_][]const u8{ "run", "--netns", "office", "--udp-nat", "address-port", "--systemd-resolved", "off", "--tun-guid", "{24198F4C-7895-434C-AD35-9E29A92DDC51}" };
     const p = try parse(arena_state.allocator(), &argv);
     try std.testing.expectEqualStrings("office", p.st.cfg.device.netns.slice());
+    try std.testing.expectEqual(@as(u32, 0x24198F4C), p.st.cfg.device.guid.?.d1);
     try std.testing.expectEqual(config.NatMode.address_port, p.st.cfg.stack.udp_nat);
     try std.testing.expectEqual(config.AutoMode.off, p.st.cfg.dns_resolved);
     try std.testing.expectError(error.InvalidArgument, parse(arena_state.allocator(), &[_][]const u8{ "run", "--udp-nat", "cone" }));

@@ -21,6 +21,7 @@ pub const Document = struct {
         txqueuelen: ?u32 = null,
         configure: ?bool = null,
         netns: ?[]const u8 = null,
+        guid: ?[]const u8 = null,
         address: ?[]const []const u8 = null,
     } = null,
     stack: ?struct {
@@ -244,6 +245,9 @@ pub const State = struct {
             set(&c.device.txqueuelen, t.txqueuelen);
             set(&c.device.configure, t.configure);
             if (t.netns) |n| c.device.netns = .init(n);
+            if (t.guid) |g| {
+                c.device.guid = if (g.len == 0) null else (config.Guid.parse(g) catch return error.ConfigError);
+            }
             if (t.address) |list| for (list) |text| s.addAddress(text) catch return error.ConfigError;
         }
         if (doc.stack) |st| {
@@ -574,10 +578,11 @@ test "json document carries namespace, nat and address lists" {
     defer arena_state.deinit();
     var s: State = .{};
     try s.applyJson(arena_state.allocator(),
-        \\{"tun":{"netns":"office","address":["10.5.0.1/24","10.6.0.1/24","fd11::1/64"]},
+        \\{"tun":{"netns":"office","guid":"24198F4C-7895-434C-AD35-9E29A92DDC51","address":["10.5.0.1/24","10.6.0.1/24","fd11::1/64"]},
         \\ "stack":{"udp_nat":"address_port"},"dns":{"systemd_resolved":false}}
     );
     try std.testing.expectEqualStrings("office", s.cfg.device.netns.slice());
+    try std.testing.expectEqual(@as(u16, 0x7895), s.cfg.device.guid.?.d2);
     try std.testing.expectEqual(config.NatMode.address_port, s.cfg.stack.udp_nat);
     try std.testing.expectEqual(config.AutoMode.off, s.cfg.dns_resolved);
     try std.testing.expectEqual(@as(u8, 24), s.cfg.device.address4.?.bits);

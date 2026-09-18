@@ -274,6 +274,14 @@ export fn zeptun_set_passthrough_callback(tun: ?*anyopaque, cb: ?PacketsFn, ctx:
     return code(.ok);
 }
 
+export fn zeptun_set_adapter_guid(tun: ?*anyopaque, guid: ?[*:0]const u8) callconv(.c) c_int {
+    const h = handleOf(tun) orelse return code(.invalid_argument);
+    const text = guid orelse return code(.invalid_argument);
+    if (h.started.load(.acquire)) return code(.already_running);
+    h.engine.setAdapterGuid(std.mem.span(text)) catch return code(.invalid_argument);
+    return code(.ok);
+}
+
 export fn zeptun_set_device_fd(tun: ?*anyopaque, fd: c_int) callconv(.c) c_int {
     const h = handleOf(tun) orelse return code(.invalid_argument);
     if (h.started.load(.acquire)) return code(.already_running);
