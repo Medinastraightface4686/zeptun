@@ -20,6 +20,7 @@ DURATION=${DURATION:-10}
 REPEAT=${REPEAT:-3}
 QUEUES=${QUEUES:-$(nproc)}
 MTU=${MTU:-8500}
+SETTLE=${SETTLE:-5}
 ENGINES=${ENGINES:-"zeptun-hybrid zeptun-userspace hev"}
 SCENARIOS=${SCENARIOS:-"tcp-up-1 tcp-up-10 tcp-down-1 rr rr-8x1k"}
 ZEPTUN_ARGS=${ZEPTUN_ARGS:-}
@@ -147,6 +148,18 @@ stop_engine() {
     sleep 0.5
 }
 
+engine_memory() {
+    mem_rss=0
+    mem_pss=0
+    for pid in $ENGINE_PIDS; do
+        r=$(awk '/^VmRSS:/ {print $2}' /proc/"$pid"/status 2> /dev/null || echo 0)
+        p=$(awk '/^Pss:/ {s += $2} END {printf "%d", s}' /proc/"$pid"/smaps_rollup 2> /dev/null || echo 0)
+        mem_rss=$((mem_rss + ${r:-0}))
+        mem_pss=$((mem_pss + ${p:-0}))
+    done
+    printf '%s %s\n' "$mem_rss" "$mem_pss"
+}
+
 monitor_engine() {
     tag=$1
     MON_PIDS=""
@@ -234,8 +247,13 @@ run_scenario() {
     esac
     for mp in $MON_PIDS; do wait "$mp" 2> /dev/null || true; done
     set -- $(summarize_monitor "$tag")
-    printf '{"engine":"%s","scenario":"%s","rep":%s,"value":"%s","unit":"%s","cpu_pct":%s,"rss_kb":%s,"pss_kb":%s,"mtu":%s,"queues":%s}\n' "$engine" "$scenario" "$rep" "$value" "$unit" "$1" "$2" "$3" "$MTU" "$QUEUES" >> "$RESULTS"
-    printf "  %-18s %-12s rep %s: %s %s cpu %s%% rss %s KB\n" "$engine" "$scenario" "$rep" "$value" "$unit" "$1" "$2"
+    cpu_pct=$1
+    peak_rss=$2
+    peak_pss=$3
+    sleep "$SETTLE"
+    set -- $(engine_memory)
+    printf '{"engine":"%s","scenario":"%s","rep":%s,"value":"%s","unit":"%s","cpu_pct":%s,"rss_kb":%s,"pss_kb":%s,"rss_after_kb":%s,"pss_after_kb":%s,"settle_s":%s,"mtu":%s,"queues":%s}\n' "$engine" "$scenario" "$rep" "$value" "$unit" "$cpu_pct" "$peak_rss" "$peak_pss" "$1" "$2" "$SETTLE" "$MTU" "$QUEUES" >> "$RESULTS"
+    printf "  %-18s %-12s rep %s: %s %s cpu %s%% rss %s KB, %s KB after %ss idle\n" "$engine" "$scenario" "$rep" "$value" "$unit" "$cpu_pct" "$peak_rss" "$1" "$SETTLE"
 }
 
 rep=1
@@ -266,7 +284,7 @@ rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 groups = {}
 for r in rows:
     groups.setdefault((r["engine"], r["scenario"]), []).append(r)
-lines = ["| engine | scenario | median | cpu % | max rss MB |", "|---|---|---:|---:|---:|"]
+lines = ["| engine | scenario | median | cpu % | max rss MB | rss after idle MB |", "|---|---|---:|---:|---:|---:|"]
 for (engine, scenario), rs in groups.items():
     def num(v):
         try:
@@ -277,7 +295,8 @@ for (engine, scenario), rs in groups.items():
     mid = vals[len(vals) // 2]
     cpu = statistics.median(r["cpu_pct"] for r in rs)
     rss = max(r["rss_kb"] for r in rs) / 1024
-    lines.append(f"| {engine} | {scenario} | {mid['value']} {mid['unit']} | {cpu:.0f} | {rss:.1f} |")
+    after = max(r.get("rss_after_kb", 0) for r in rs) / 1024
+    lines.append(f"| {engine} | {scenario} | {mid['value']} {mid['unit']} | {cpu:.0f} | {rss:.1f} | {after:.1f} |")
 open(sys.argv[2], "w").write("\n".join(lines) + "\n")
 print("\n".join(lines))
 PY

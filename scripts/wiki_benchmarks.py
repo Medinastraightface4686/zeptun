@@ -43,6 +43,10 @@ Every number here is produced by the `benchmark` workflow in the repository, on 
 
 ## Memory
 
+Memory is read twice per scenario: the highest sample while the load runs, and
+again after a few seconds of idle. The second reading is what shows whether an
+engine hands the memory back or keeps it for the life of the process.
+
 ![memory](res/memory.svg)
 
 ## Scenarios

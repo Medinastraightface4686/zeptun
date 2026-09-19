@@ -27,6 +27,10 @@ Measured by the [benchmark workflow](.github/workflows/benchmark.yml) on a GitHu
 <img src="docs/bench/summary-throughput.svg" width="420" alt="throughput">
 <img src="docs/bench/summary-cpu.svg" width="420" alt="cpu">
 <img src="docs/bench/summary-transactions.svg" width="420" alt="transactions">
+<img src="docs/bench/summary-memory.svg" width="420" alt="memory">
+
+The second memory bar is read after the load stops: the packet pool hands idle
+pages back to the kernel instead of holding them for the life of the process.
 
 Method, runner specification, latency, UDP, memory and the raw tables: [docs/bench](docs/bench).
 

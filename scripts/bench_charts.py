@@ -7,6 +7,7 @@ PALETTE = ["#2563eb", "#64748b", "#0f766e", "#b45309", "#7c3aed", "#be123c"]
 BAR = 18
 GAP = 6
 GROUP_GAP = 18
+GROUP_HEAD = 20
 LEFT = 150
 RIGHT = 90
 TOP = 56
@@ -44,7 +45,7 @@ def escape(text):
 
 def chart(path, title, note, groups, engines, values, unit, better):
     rows = sum(len(engines) for _ in groups)
-    height = TOP + rows * (BAR + GAP) + len(groups) * GROUP_GAP + 24
+    height = TOP + rows * (BAR + GAP) + len(groups) * (GROUP_GAP + GROUP_HEAD) + 24
     width = 920
     span = width - LEFT - RIGHT
     top = max([values.get((g, e), 0.0) for g in groups for e in engines] + [1.0])
@@ -60,6 +61,7 @@ def chart(path, title, note, groups, engines, values, unit, better):
         out.append(
             f'<text x="16" y="{y + 12}" font-size="12" font-weight="600" fill="#334155">{escape(group)}</text>'
         )
+        y += GROUP_HEAD
         for index, engine in enumerate(engines):
             value = values.get((group, engine), 0.0)
             length = 0 if top == 0 else max(2, int(span * value / top))
@@ -101,14 +103,14 @@ def order(rows, scenarios):
     return present, engines
 
 
-def compact(path, title, note, rows, unit, better, width=440):
+def compact(path, title, note, rows, unit, better, width=440, paired=False):
     label_width = 128
-    bar = 15
-    gap = 5
-    top = 46
-    height = top + len(rows) * (bar + gap) + 12
+    bar = 15 if not paired else 9
+    gap = 5 if not paired else 9
+    top = 46 if not paired else 60
+    height = top + len(rows) * (bar * (2 if paired else 1) + gap) + 12
     span = width - label_width - 74
-    best = max([value for _, value in rows] + [1.0])
+    best = max([max(value) if paired else value for _, value in rows] + [1.0])
     out = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
         'font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="12">',
@@ -116,21 +118,32 @@ def compact(path, title, note, rows, unit, better, width=440):
         f'<text x="12" y="20" font-size="13" font-weight="600" fill="#0f172a">{escape(title)}</text>',
         f'<text x="12" y="36" font-size="11" fill="#64748b">{escape(note)} &#183; {escape(better)}</text>',
     ]
+    if paired:
+        out.append(
+            f'<rect x="{label_width}" y="44" width="9" height="7" rx="2" fill="{PALETTE[0]}"/>'
+            f'<text x="{label_width + 14}" y="51" font-size="10" fill="#64748b">under load</text>'
+            f'<rect x="{label_width + 86}" y="44" width="9" height="7" rx="2" fill="{PALETTE[0]}" opacity="0.4"/>'
+            f'<text x="{label_width + 100}" y="51" font-size="10" fill="#64748b">after it stops</text>'
+        )
     y = top
     for index, (name, value) in enumerate(rows):
-        length = 0 if best == 0 else max(2, int(span * value / best))
+        series = value if paired else (value,)
         color = PALETTE[0] if index == 0 else "#94a3b8"
+        label_y = y + (bar * 2 - 4 if paired else bar - 3)
         out.append(
-            f'<text x="{label_width - 8}" y="{y + bar - 3}" text-anchor="end" font-size="11" fill="#475569">{escape(name)}</text>'
+            f'<text x="{label_width - 8}" y="{label_y}" text-anchor="end" font-size="11" fill="#475569">{escape(name)}</text>'
         )
-        out.append(
-            f'<rect x="{label_width}" y="{y}" width="{length}" height="{bar - 2}" rx="2" fill="{color}"/>'
-        )
-        text = f"{value:.1f}" if value < 100 else f"{value:.0f}"
-        out.append(
-            f'<text x="{label_width + length + 6}" y="{y + bar - 3}" font-size="11" fill="#0f172a">{text} {escape(unit)}</text>'
-        )
-        y += bar + gap
+        for slot, item in enumerate(series):
+            length = 0 if best == 0 else max(2, int(span * item / best))
+            fade = ' opacity="0.4"' if slot else ""
+            out.append(
+                f'<rect x="{label_width}" y="{y + slot * bar}" width="{length}" height="{bar - 2}" rx="2" fill="{color}"{fade}/>'
+            )
+            text = f"{item:.1f}" if item < 100 else f"{item:.0f}"
+            out.append(
+                f'<text x="{label_width + length + 6}" y="{y + slot * bar + bar - 3}" font-size="11" fill="#0f172a">{text} {escape(unit)}</text>'
+            )
+        y += bar * (2 if paired else 1) + gap
     out.append("</svg>")
     with open(path, "w") as handle:
         handle.write("\n".join(out) + "\n")
@@ -179,6 +192,33 @@ def summary(rows, out_dir, dest):
             cpu,
             "%",
             "lower is better",
+        )
+    memory = {}
+    settle = 0
+    for row in rows:
+        if row["scenario"] != "tcp-down-10" or row["engine"] not in wanted:
+            continue
+        if "rss_after_kb" not in row:
+            continue
+        settle = max(settle, row.get("settle_s", 0))
+        peak, rest = memory.setdefault(NAMES.get(row["engine"], row["engine"]), ([], []))
+        peak.append(row["rss_kb"] / 1024.0)
+        rest.append(row["rss_after_kb"] / 1024.0)
+    if memory:
+        ordered = [
+            (name, (statistics.median(peak), statistics.median(rest)))
+            for name, (peak, rest) in memory.items()
+        ]
+        ordered.sort(key=lambda item: item[1][1])
+        head = [item for item in ordered if item[0] == "zeptun"]
+        compact(
+            os.path.join(dest, "summary-memory.svg"),
+            "Memory while downloading, 10 streams",
+            "%d s of idle before the second reading" % settle,
+            head + [item for item in ordered if item[0] != "zeptun"],
+            "MB",
+            "lower is better",
+            paired=True,
         )
     tps = rank("rr-8x1k", lambda _, d: d.get("tps", 0.0))
     if tps:
@@ -267,17 +307,30 @@ def main():
         )
 
     memory = {}
+    settle = 0
     for row in rows:
         memory.setdefault(("peak while forwarding", row["engine"]), []).append(row["rss_kb"] / 1024.0)
+        if "rss_after_kb" in row:
+            memory.setdefault(("after the load stops", row["engine"]), []).append(row["rss_after_kb"] / 1024.0)
+            settle = max(settle, row.get("settle_s", 0))
     if memory:
         engines = sorted({key[1] for key in memory}, key=lambda name: (0 if name.startswith("zeptun") else 1, name))
+        groups = ["peak while forwarding"]
+        values = {key: max(items) for key, items in memory.items() if key[0] == groups[0]}
+        note = "highest sample of every run"
+        if settle:
+            groups.append("after the load stops")
+            for key, items in memory.items():
+                if key[0] == groups[1]:
+                    values[key] = max(items)
+            note = "highest sample of every run, then again after %d s of idle" % settle
         chart(
             os.path.join(dest, "memory.svg"),
             "Resident memory",
-            "highest sample of every run",
-            ["peak while forwarding"],
+            note,
+            groups,
             engines,
-            {key: max(items) for key, items in memory.items()},
+            values,
             "MB",
             "lower is better",
         )

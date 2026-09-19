@@ -15,6 +15,10 @@ on:
         description: TUN queues
         type: string
         default: "4"
+      settle:
+        description: Idle seconds before the second memory reading
+        type: string
+        default: "5"
       publish:
         description: Commit the charts to docs/bench
         type: boolean
@@ -85,6 +89,7 @@ jobs:
           DURATION: ${{ inputs.duration || '8' }}
           REPEAT: ${{ inputs.repeat || '2' }}
           QUEUES: ${{ inputs.queues || '4' }}
+          SETTLE: ${{ inputs.settle || '5' }}
           OUT_DIR: bench-results
         run: sh scripts/bench_netns.sh
 
@@ -109,7 +114,7 @@ jobs:
             cat bench-results/runner.md
             printf '\n## Method\n\n'
             printf 'Two network namespaces joined by a veth pair. Traffic enters the tunnel device (MTU 8500), leaves through the same SOCKS5 server (hev-socks5-server) for every engine, and reaches the servers in the second namespace. Engines are interleaved: each round starts every engine once and runs every scenario against it, so background noise spreads evenly. CPU comes from `/proc/<pid>/stat` and memory from `VmRSS`, summed over all processes of an engine.\n\n'
-            printf 'Duration %s s per scenario, %s rounds, %s queues.\n\n' "${DURATION}" "${REPEAT}" "${QUEUES}"
+            printf 'Duration %s s per scenario, %s rounds, %s queues. Memory is read twice: the highest sample while the scenario runs, and again after %s s of idle, which shows whether an engine gives the memory back.\n\n' "${DURATION}" "${REPEAT}" "${QUEUES}" "${SETTLE}"
             printf '## Throughput\n\n![throughput](throughput.svg)\n\n'
             printf '## CPU\n\n![cpu](cpu.svg)\n\n'
             printf '## Request/response\n\n![transactions](transactions.svg)\n\n![latency](latency.svg)\n\n'
@@ -125,6 +130,7 @@ jobs:
           DURATION: ${{ inputs.duration || '8' }}
           REPEAT: ${{ inputs.repeat || '2' }}
           QUEUES: ${{ inputs.queues || '4' }}
+          SETTLE: ${{ inputs.settle || '5' }}
 
       - name: summary
         if: always()
