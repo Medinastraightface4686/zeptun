@@ -122,6 +122,60 @@ pub const Snapshot = blk: {
     break :blk @Struct(.@"extern", null, &names, &types, &attrs);
 };
 
+pub const Gauges = struct {
+    buffers: Cell align(std.atomic.cache_line) = .init(0),
+    in_use: Cell = .init(0),
+    resident: Cell = .init(0),
+    released: Cell = .init(0),
+    starved: Cell = .init(0),
+    exhausted: Cell = .init(0),
+
+    pub fn publish(g: *Gauges, m: Memory) void {
+        cellStore(&g.buffers, m.buffers);
+        cellStore(&g.in_use, m.in_use);
+        cellStore(&g.resident, m.resident_bytes);
+        cellStore(&g.released, m.released_bytes);
+        cellStore(&g.starved, m.starved_flows);
+        cellStore(&g.exhausted, m.exhausted);
+    }
+
+    pub fn read(g: *const Gauges) Memory {
+        return .{
+            .buffers = cellRead(&g.buffers),
+            .in_use = cellRead(&g.in_use),
+            .resident_bytes = cellRead(&g.resident),
+            .released_bytes = cellRead(&g.released),
+            .starved_flows = cellRead(&g.starved),
+            .exhausted = cellRead(&g.exhausted),
+        };
+    }
+};
+
+pub const Memory = extern struct {
+    version: u32 = 1,
+    workers: u32 = 0,
+    buffers: u64 = 0,
+    in_use: u64 = 0,
+    resident_bytes: u64 = 0,
+    released_bytes: u64 = 0,
+    starved_flows: u64 = 0,
+    exhausted: u64 = 0,
+};
+
+pub fn mergeMemory(out: *Memory, all: []const Gauges) void {
+    out.* = .{};
+    out.workers = @intCast(all.len);
+    for (all) |*g| {
+        const m = g.read();
+        out.buffers += m.buffers;
+        out.in_use += m.in_use;
+        out.resident_bytes += m.resident_bytes;
+        out.released_bytes += m.released_bytes;
+        out.starved_flows += m.starved_flows;
+        out.exhausted += m.exhausted;
+    }
+}
+
 pub fn merge(out: *Snapshot, all: []const Counters) void {
     out.* = .{};
     out.workers = @intCast(all.len);

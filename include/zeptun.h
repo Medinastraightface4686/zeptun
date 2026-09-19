@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #define ZEPTUN_VERSION_MAJOR 1
-#define ZEPTUN_VERSION_MINOR 0
+#define ZEPTUN_VERSION_MINOR 1
 #define ZEPTUN_VERSION_PATCH 0
 
 #define ZEPTUN_OK 0
@@ -174,6 +174,17 @@ typedef struct ZeptunStats {
     uint64_t udp_migrated;
 } ZeptunStats;
 
+typedef struct ZeptunMemory {
+    uint32_t version;
+    uint32_t workers;
+    uint64_t buffers;
+    uint64_t in_use;
+    uint64_t resident_bytes;
+    uint64_t released_bytes;
+    uint64_t starved_flows;
+    uint64_t exhausted;
+} ZeptunMemory;
+
 uint32_t zeptun_version(void);
 const char *zeptun_version_string(void);
 const char *zeptun_strerror(int code);
@@ -202,6 +213,7 @@ int zeptun_inject_packets(Zeptun *tun, const ZeptunPacket *packets, size_t count
 
 int zeptun_network_changed(Zeptun *tun, uint32_t interface_index);
 int zeptun_stats(Zeptun *tun, ZeptunStats *out);
+int zeptun_memory(Zeptun *tun, ZeptunMemory *out);
 int zeptun_interface_name(Zeptun *tun, char *buffer, size_t len);
 
 #ifdef __cplusplus

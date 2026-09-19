@@ -73,6 +73,8 @@ static uint32_t judge(void *ctx, const ZeptunFlow *flow) {
 
 `zeptun_stats(tun, &stats)` fills a `ZeptunStats` snapshot. `version` is 3. Besides packet and byte counters it reports `tcp_active`, `tcp_opened`, `tcp_retransmits`, `udp_active`, `nat_active`, `gso_segments`, `gro_merged`, `socks5_pool_hits`, `dns_fake_answers`, `dns_hijacked`, `tcp_migrated`, `udp_migrated`, `icmp_echo`, `icmp_time_exceeded` and `workers`. The snapshot is lock-free, so counters may be momentarily inconsistent with each other.
 
+`zeptun_memory(tun, &memory)` fills a `ZeptunMemory` snapshot of the packet pool: `buffers` and `in_use` count buffers, `resident_bytes` is how much of the pool is still backed by physical pages, `released_bytes` is how much has been handed back to the kernel since start, `starved_flows` is how many flows are waiting for a buffer and `exhausted` counts failed allocations. The pool releases idle pages a few seconds after a burst, so `resident_bytes` falls on its own.
+
 ## Errors
 
 `ZEPTUN_OK` is zero and every error is negative: `INVALID_ARGUMENT`, `OUT_OF_MEMORY`, `PERMISSION_DENIED`, `NOT_SUPPORTED`, `DEVICE`, `IO`, `ALREADY_RUNNING`, `NOT_RUNNING`, `WOULD_BLOCK`, `NOT_FOUND`, `LIMIT_EXCEEDED`, `ADDRESS_IN_USE`, `SYSTEM_OUTDATED`, `CLOSED`, `TIMEOUT`, `CONFIG`, `ROUTE`, `BUSY`. `zeptun_strerror` turns a code into a message.
@@ -86,7 +88,7 @@ static uint32_t judge(void *ctx, const ZeptunFlow *flow) {
 | `zeptun_create` | any thread; handles are independent |
 | every other setter | before `zeptun_start` or `zeptun_run`, otherwise `ZEPTUN_ERR_ALREADY_RUNNING` |
 | `zeptun_write_packet`, `zeptun_write_packets`, `zeptun_inject_packets` | any number of threads at once; a full queue returns `ZEPTUN_ERR_WOULD_BLOCK` or a short count |
-| `zeptun_stats`, `zeptun_stop` | any thread, including from callbacks |
+| `zeptun_stats`, `zeptun_memory`, `zeptun_stop` | any thread, including from callbacks |
 | `zeptun_destroy` | once, never concurrently with another call on the same handle, never from a callback |
 
 Callbacks run on worker threads and must not block.

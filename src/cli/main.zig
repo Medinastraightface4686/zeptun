@@ -237,11 +237,13 @@ pub fn main(init: std.process.Init.Minimal) u8 {
         if (parsed.st.stats_interval_s == 0 or stop_requested.load(.acquire)) continue;
         var cur: zeptun.stats.Snapshot = .{};
         e.snapshot(&cur);
+        var mem: zeptun.stats.Memory = .{};
+        e.memory(&mem);
         const now = sys.monotonicMs();
         const dt: f64 = @as(f64, @floatFromInt(@max(now - prev_ms, 1))) / 1000.0;
         const rx_mbps = @as(f64, @floatFromInt(cur.rx_bytes -% prev.rx_bytes)) * 8.0 / 1e6 / dt;
         const tx_mbps = @as(f64, @floatFromInt(cur.tx_bytes -% prev.tx_bytes)) * 8.0 / 1e6 / dt;
-        file.print(.err, "zeptun stats: tun rx {d:.1} Mbit/s tx {d:.1} Mbit/s | pkts rx {d} tx {d} | up rx {d} tx {d} | tcp active {d} opened {d} rtx {d} rto {d} | udp active {d} | nat {d} | drops rx {d} tx {d} | pool exhausted {d} | gso rx {d} tx {d} | workers {d} handoffs {d} migrated tcp {d} udp {d}\n", .{
+        file.print(.err, "zeptun stats: tun rx {d:.1} Mbit/s tx {d:.1} Mbit/s | pkts rx {d} tx {d} | up rx {d} tx {d} | tcp active {d} opened {d} rtx {d} rto {d} | udp active {d} | nat {d} | drops rx {d} tx {d} | pool exhausted {d} | gso rx {d} tx {d} | workers {d} handoffs {d} migrated tcp {d} udp {d} | mem {d}/{d} bufs {d} KB resident {d} KB released {d} waiting\n", .{
             rx_mbps,
             tx_mbps,
             cur.rx_packets,
@@ -263,6 +265,11 @@ pub fn main(init: std.process.Init.Minimal) u8 {
             cur.handoffs,
             cur.tcp_migrated,
             cur.udp_migrated,
+            mem.in_use,
+            mem.buffers,
+            mem.resident_bytes / 1024,
+            mem.released_bytes / 1024,
+            mem.starved_flows,
         });
         prev = cur;
         prev_ms = now;

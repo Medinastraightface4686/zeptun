@@ -26,7 +26,7 @@ fn rawPanic(msg: []const u8, ra: ?usize) noreturn {
 }
 
 pub const version_major = 1;
-pub const version_minor = 0;
+pub const version_minor = 1;
 pub const version_patch = 0;
 
 pub const Packet = external.Packet;
@@ -395,6 +395,13 @@ export fn zeptun_stats(tun: ?*anyopaque, out: ?*stats.Snapshot) callconv(.c) c_i
     return code(.ok);
 }
 
+export fn zeptun_memory(tun: ?*anyopaque, out: ?*stats.Memory) callconv(.c) c_int {
+    const h = handleOf(tun) orelse return code(.invalid_argument);
+    const o = out orelse return code(.invalid_argument);
+    h.engine.memory(o);
+    return code(.ok);
+}
+
 export fn zeptun_interface_name(tun: ?*anyopaque, buf: ?[*]u8, len: usize) callconv(.c) c_int {
     const h = handleOf(tun) orelse return code(.invalid_argument);
     const b = buf orelse return code(.invalid_argument);
@@ -412,6 +419,6 @@ test "ffi config roundtrip" {
     try std.testing.expectEqual(config.StackMode.userspace, z.stack.mode);
     try std.testing.expectEqual(@as(u32, 1200), z.stack.max_tcp_sessions);
     try std.testing.expectEqualStrings("172.19.0.1/30", cstr(&c.address4));
-    try std.testing.expect(zeptun_version() == 0x010000);
+    try std.testing.expect(zeptun_version() == 0x010100);
     try std.testing.expectEqualStrings("timeout", std.mem.span(zeptun_strerror(-15)));
 }

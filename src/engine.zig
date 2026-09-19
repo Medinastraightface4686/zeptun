@@ -105,6 +105,7 @@ pub fn Worker(comptime L: type) type {
         loop: Loop,
         pool: pool.Pool,
         counters: *stats.Counters,
+        gauges: *stats.Gauges,
         wheel: timeouts.Wheel,
         device: DeviceQueue,
         dev_caps: device.Capabilities,
@@ -140,6 +141,7 @@ pub fn Worker(comptime L: type) type {
             w.cfg = cfg;
             w.allocator = allocator;
             w.counters = &engine.counters[id];
+            w.gauges = &engine.gauges[id];
             w.wake_mask = 0;
             w.thread = null;
             w.network_epoch = engine.network_epoch.load(.acquire);
@@ -556,6 +558,14 @@ pub fn Worker(comptime L: type) type {
             if (now_ms < w.trim_at_ms) return;
             w.trim_at_ms = now_ms + pool_trim_ms;
             if (w.pool.trimPending()) _ = w.pool.trim();
+            w.gauges.publish(.{
+                .buffers = w.pool.capacity(),
+                .in_use = w.pool.in_use,
+                .resident_bytes = w.pool.residentBytes(),
+                .released_bytes = w.pool.released,
+                .starved_flows = if (has_userspace_tcp) w.tcp.starvedCount() else 0,
+                .exhausted = w.pool.exhausted,
+            });
         }
 
         fn elasticWaitMs(w: *Self, wait_ms: u64) u64 {
@@ -852,6 +862,7 @@ pub const Engine = struct {
     spawned: std.atomic.Value(u16) = .init(0),
     elastic: ?*Elastic = null,
     counters: []stats.Counters = &.{},
+    gauges: []stats.Gauges = &.{},
     sizing: config.Sizing = undefined,
     caps: device.Capabilities = .{},
     opened: ?device.Opened = null,
@@ -1207,6 +1218,8 @@ pub const Engine = struct {
         e.sizing = config.size(cfg, workers, e.caps.bufferSize(), e.caps.minBufferSize(), session_bytes);
         e.counters = try e.allocator.alloc(stats.Counters, e.worker_cap);
         for (e.counters) |*c| c.* = .{};
+        e.gauges = try e.allocator.alloc(stats.Gauges, e.worker_cap);
+        for (e.gauges) |*g| g.* = .{};
         try e.createWorkers();
         e.setup_done = true;
         log.info("engine: {d} worker(s), elastic up to {d}, backend {t}, device mtu {d}, vnet_hdr={} tso={} uso={}", .{ workers, if (e.elastic != null) cap else workers, e.backend, e.caps.mtu, e.caps.vnet_hdr, e.caps.tso, e.caps.uso });
@@ -1450,6 +1463,7 @@ pub const Engine = struct {
         if (e.passthrough_shared) |s| s.deinit();
         if (e.fake_dns) |t| t.deinit();
         if (e.counters.len > 0) e.allocator.free(e.counters);
+        if (e.gauges.len > 0) e.allocator.free(e.gauges);
         e.allocator.destroy(e);
     }
 
@@ -1463,6 +1477,11 @@ pub const Engine = struct {
 
     pub fn snapshot(e: *const Engine, out: *stats.Snapshot) void {
         stats.merge(out, e.counters);
+        out.workers = @max(1, e.live.load(.acquire));
+    }
+
+    pub fn memory(e: *const Engine, out: *stats.Memory) void {
+        stats.mergeMemory(out, e.gauges);
         out.workers = @max(1, e.live.load(.acquire));
     }
 

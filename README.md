@@ -247,10 +247,11 @@ zeptun_destroy(tun);
 | `zeptun_set_protect_callback(tun, cb, ctx)` | approve every upstream socket before it connects |
 | `zeptun_set_flow_callback(tun, cb, ctx)` | decide per flow: proxy, direct, drop or reject |
 | `zeptun_stats(tun, stats)` | lock-free snapshot of the counters |
+| `zeptun_memory(tun, memory)` | packet pool usage and how much memory has been returned to the kernel |
 | `zeptun_network_changed(tun, index)` | tell the engine that the default route moved |
 | `zeptun_strerror(code)` | message for an error code |
 
-Callbacks run on worker threads and must not block. Every setter except `zeptun_stop`, `zeptun_stats` and the packet functions must be called before `zeptun_start`.
+Callbacks run on worker threads and must not block. Every setter except `zeptun_stop`, `zeptun_stats`, `zeptun_memory` and the packet functions must be called before `zeptun_start`.
 
 ### Kotlin
 
