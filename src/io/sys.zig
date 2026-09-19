@@ -232,6 +232,15 @@ pub fn pageSize() usize {
     return std.heap.pageSize();
 }
 
+pub fn keepPagesSmall(mem: []u8) void {
+    if (!is_linux) return;
+    const page = pageSize();
+    const start = std.mem.alignForward(usize, @intFromPtr(mem.ptr), page);
+    const end = std.mem.alignBackward(usize, @intFromPtr(mem.ptr) + mem.len, page);
+    if (end <= start) return;
+    _ = linux.madvise(@ptrFromInt(start), end - start, linux.MADV.NOHUGEPAGE);
+}
+
 pub fn releasePages(mem: []u8) bool {
     const page = pageSize();
     const start = std.mem.alignForward(usize, @intFromPtr(mem.ptr), page);

@@ -79,14 +79,12 @@ fn shiftFor(buffer_size: u32) u5 {
 
 const Slab = struct {
     chain: ?*Buffer = null,
-    in_use: u32 = 0,
-    idle: u16 = 0,
-    dropped: bool = false,
 };
 
 pub const default_headroom: u32 = 128;
 pub const max_super_packet: u32 = 65535;
 pub const flag_control: u16 = 0x8000;
+pub const flag_dropped: u16 = 0x4000;
 pub const hop_mask: u16 = 0x000f;
 
 pub const Pool = struct {
@@ -103,7 +101,7 @@ pub const Pool = struct {
     reserve: u32 = 0,
     slabs: []Slab,
     slab_shift: u5,
-    live_slabs: u32,
+    resident: u32,
     hwm: u32,
     released: u64,
     remote: std.atomic.Value(?*Buffer),
@@ -113,6 +111,7 @@ pub const Pool = struct {
         const total = @as(usize, options.count) * options.buffer_size;
         const memory = try allocator.alignedAlloc(u8, .fromByteUnits(std.heap.page_size_min), total);
         errdefer allocator.free(memory);
+        sys.keepPagesSmall(memory);
         const buffers = try allocator.alloc(Buffer, options.count);
         errdefer allocator.free(buffers);
         const shift = shiftFor(options.buffer_size);
@@ -132,7 +131,7 @@ pub const Pool = struct {
             .headroom = options.headroom,
             .slabs = slabs,
             .slab_shift = shift,
-            .live_slabs = 0,
+            .resident = 0,
             .hwm = 0,
             .released = 0,
             .remote = .init(null),
@@ -175,7 +174,6 @@ pub const Pool = struct {
             if (p.initialized < p.buffers.len) {
                 const i = p.initialized;
                 p.initialized += 1;
-                if (i & ((@as(u32, 1) << p.slab_shift) - 1) == 0) p.live_slabs += 1;
                 const nb = &p.buffers[i];
                 nb.* = .{
                     .ptr = p.memory.ptr + @as(usize, i) * p.buffer_size,
@@ -189,6 +187,7 @@ pub const Pool = struct {
                     .pool = p,
                     .meta = 0,
                 };
+                p.resident += 1;
                 break :blk nb;
             }
             if (p.drainRemote() == 0) {
@@ -198,13 +197,7 @@ pub const Pool = struct {
             break :blk p.free.?;
         };
         if (b == p.free) p.free = b.next;
-        const slab = &p.slabs[b.index >> p.slab_shift];
-        if (slab.dropped) {
-            slab.dropped = false;
-            p.live_slabs += 1;
-        }
-        slab.in_use += 1;
-        slab.idle = 0;
+        if (b.flags & flag_dropped != 0) p.resident += 1;
         b.next = null;
         b.refs = 1;
         b.flags = 0;
@@ -221,7 +214,6 @@ pub const Pool = struct {
         b.next = p.free;
         p.free = b;
         p.in_use -= 1;
-        p.slabs[b.index >> p.slab_shift].in_use -= 1;
     }
 
     pub fn put(p: *Pool, b: *Buffer) void {
@@ -251,7 +243,6 @@ pub const Pool = struct {
             list = b.next;
             b.next = p.free;
             p.free = b;
-            p.slabs[b.index >> p.slab_shift].in_use -= 1;
             n += 1;
         }
         p.in_use -= n;
@@ -284,37 +275,31 @@ pub const Pool = struct {
     }
 
     inline fn keepSlabs(p: *const Pool) u32 {
-        return (@max(p.in_use, p.hwm) >> p.slab_shift) + 2;
+        return @max(p.in_use, p.hwm) + (@as(u32, 1) << p.slab_shift);
     }
 
     pub inline fn trimPending(p: *const Pool) bool {
-        return p.live_slabs > p.keepSlabs();
+        return p.resident > p.keepSlabs();
     }
 
     pub fn trim(p: *Pool) usize {
         if (p.initialized == 0) return 0;
         _ = p.drainRemote();
-        p.hwm = @max(p.in_use, p.hwm - (p.hwm / 2));
-        if (p.live_slabs <= p.keepSlabs()) return 0;
+        p.hwm = @max(p.in_use, p.hwm / 2);
+        const keep = p.keepSlabs();
+        if (p.resident <= keep) return 0;
         p.compact();
+        var live: u32 = p.in_use;
         var freed: usize = 0;
-        for (p.slabs, 0..) |*slab, i| {
-            const first: u32 = @intCast(i << p.slab_shift);
-            if (first >= p.initialized) break;
-            if (slab.in_use != 0) {
-                slab.idle = 0;
-                continue;
-            }
-            if (slab.dropped) continue;
-            slab.idle +|= 1;
-            if (slab.idle < trim_rounds) continue;
-            const last = @min(first + (@as(u32, 1) << p.slab_shift), p.initialized);
-            const span = @as(usize, last - first) * p.buffer_size;
-            if (!sys.releasePages(p.memory[@as(usize, first) * p.buffer_size ..][0..span])) continue;
-            slab.dropped = true;
-            p.live_slabs -= 1;
-            freed += span;
-            if (p.live_slabs <= p.keepSlabs()) break;
+        var cur = p.free;
+        while (cur) |b| : (cur = b.next) {
+            if (b.flags & flag_dropped != 0) continue;
+            live += 1;
+            if (live <= keep) continue;
+            if (!sys.releasePages(b.storage())) continue;
+            b.flags |= flag_dropped;
+            p.resident -= 1;
+            freed += b.cap;
         }
         p.released += freed;
         return freed;
@@ -325,14 +310,7 @@ pub const Pool = struct {
     }
 
     pub fn residentBytes(p: *const Pool) usize {
-        var n: usize = 0;
-        for (p.slabs, 0..) |slab, i| {
-            const first: u32 = @intCast(i << p.slab_shift);
-            if (first >= p.initialized) break;
-            if (slab.dropped) continue;
-            n += @as(usize, @min(first + (@as(u32, 1) << p.slab_shift), p.initialized) - first) * p.buffer_size;
-        }
-        return n;
+        return @as(usize, p.resident) * p.buffer_size;
     }
 };
 
@@ -470,11 +448,14 @@ test "idle slabs are released and come back clean" {
     var rounds: u16 = 0;
     while (rounds < 32) : (rounds += 1) _ = p.trim();
     try std.testing.expect(!p.trimPending());
-    try std.testing.expectEqual(@as(usize, 2 * per_slab) * page, p.residentBytes());
+    try std.testing.expectEqual(@as(usize, per_slab) * page, p.residentBytes());
     try std.testing.expect(p.released > 0);
-    const again = p.get().?;
-    if (sys.is_linux) try std.testing.expectEqual(@as(u8, 0), again.storage()[0]);
-    p.put(again);
+    var again: [1024]*Buffer = undefined;
+    for (&again) |*g| g.* = p.get().?;
+    if (sys.is_linux) try std.testing.expectEqual(@as(u8, 0), again[1023].storage()[0]);
+    if (sys.is_linux) try std.testing.expectEqual(@as(u8, 0xAA), again[0].storage()[0]);
+    for (again) |g| p.put(g);
+    try std.testing.expectEqual(@as(usize, 1024) * page, p.residentBytes());
 }
 
 test "compaction concentrates the free list in the low slabs" {
