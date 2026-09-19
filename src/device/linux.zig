@@ -263,13 +263,16 @@ pub fn Queue(comptime W: type) type {
         free_bid_count: usize = 0,
         ring_starved: bool = false,
         ring_disabled: bool = false,
+        rx_events: u64 = 0,
+        rx_events_seen: u64 = 0,
+        pages_dropped: bool = false,
 
         pub fn init(q: *Self, allocator: std.mem.Allocator, w: *W, options: QueueOptions) !void {
             const completion = w.loop.completionBased();
             const rx = try allocator.alloc(RxSlot, @max(1, if (completion) options.rx_parallel else 1));
             errdefer allocator.free(rx);
             for (rx) |*s| s.* = .{ .queue = q };
-            const entries: usize = if (has_rings and completion and options.ring) std.math.ceilPowerOfTwo(usize, std.math.clamp(@as(usize, options.rx_parallel) * 2, 16, 1024)) catch 16 else 0;
+            const entries: usize = if (has_rings and completion and options.ring) std.math.ceilPowerOfTwo(usize, std.math.clamp(@as(usize, options.rx_parallel) * 2, 4, 1024)) catch 16 else 0;
             const ring_bufs = try allocator.alloc(?*pool.Buffer, entries);
             errdefer allocator.free(ring_bufs);
             @memset(ring_bufs, null);
@@ -396,6 +399,8 @@ pub fn Queue(comptime W: type) type {
             const w = q.worker;
             if (c.bufferId()) |bid| {
                 if (q.ring_bufs[bid]) |b| {
+                    q.rx_events += 1;
+                    q.pages_dropped = false;
                     q.ring_bufs[bid] = null;
                     q.free_bids[q.free_bid_count] = bid;
                     q.free_bid_count += 1;
@@ -482,6 +487,32 @@ pub fn Queue(comptime W: type) type {
             return q.ring_starved or q.rx_starved != 0;
         }
 
+        pub fn reclaimPending(q: *const Self) bool {
+            return q.running and !q.pages_dropped;
+        }
+
+        pub fn reclaimIdle(q: *Self) usize {
+            if (!q.running or q.pages_dropped) return 0;
+            if (q.rx_events != q.rx_events_seen) {
+                q.rx_events_seen = q.rx_events;
+                return 0;
+            }
+            var freed: usize = 0;
+            if (has_rings) {
+                for (q.ring_bufs) |slot| {
+                    const b = slot orelse continue;
+                    if (sys.releasePages(b.storage())) freed += b.cap;
+                }
+            }
+            for (q.rx) |*s| {
+                if (!s.c.isActive()) continue;
+                const b = s.buf orelse continue;
+                if (sys.releasePages(b.storage())) freed += b.cap;
+            }
+            q.pages_dropped = true;
+            return freed;
+        }
+
         pub fn refill(q: *Self) void {
             if (has_rings and q.ring_starved and !q.ring_disabled and q.running and !q.ring_c.isActive()) {
                 q.provideRing();
@@ -515,6 +546,8 @@ pub fn Queue(comptime W: type) type {
                 if (result < 0 and e != .again and e != .intr) w.counters.inc(.rx_dropped);
                 return .rearm;
             }
+            q.rx_events += 1;
+            q.pages_dropped = false;
             const n: u32 = @intCast(result);
             const b = s.buf.?;
             if (n <= q.vnet_len) {

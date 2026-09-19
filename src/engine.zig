@@ -222,7 +222,7 @@ pub fn Worker(comptime L: type) type {
                             .{
                                 .fd = engine.device_fds[id],
                                 .caps = engine.caps,
-                                .rx_parallel = cfg.io.rx_parallel,
+                                .rx_parallel = @max(2, cfg.io.rx_parallel / @max(1, engine.sizing.workers)),
                                 .tx_slots = cfg.io.tx_slots,
                                 .ring = cfg.io.multishot_rx,
                             };
@@ -547,10 +547,17 @@ pub fn Worker(comptime L: type) type {
             };
         }
 
+        fn reclaimPending(w: *Self) bool {
+            return switch (w.device) {
+                .tun => |*q| has_tun and q.reclaimPending(),
+                else => false,
+            };
+        }
+
         fn trimWaitMs(w: *Self, wait_ms: u64) u64 {
             if (has_userspace_tcp and w.tcp.hasStarved()) return @min(wait_ms, starved_wait_ms);
             if (w.deviceStarved()) return @min(wait_ms, starved_wait_ms);
-            if (w.pool.trimPending()) return @min(wait_ms, pool_trim_ms);
+            if (w.pool.trimPending() or w.reclaimPending()) return @min(wait_ms, pool_trim_ms);
             return wait_ms;
         }
 
@@ -558,6 +565,12 @@ pub fn Worker(comptime L: type) type {
             if (now_ms < w.trim_at_ms) return;
             w.trim_at_ms = now_ms + pool_trim_ms;
             if (w.pool.trimPending()) _ = w.pool.trim();
+            switch (w.device) {
+                .tun => |*q| if (has_tun) {
+                    _ = q.reclaimIdle();
+                },
+                else => {},
+            }
             w.gauges.publish(.{
                 .buffers = w.pool.capacity(),
                 .in_use = w.pool.in_use,
