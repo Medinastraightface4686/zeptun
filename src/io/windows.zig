@@ -263,6 +263,7 @@ pub const kernel32 = struct {
     pub extern "kernel32" fn GetCurrentProcessId() callconv(.winapi) u32;
     pub extern "kernel32" fn GetLastError() callconv(.winapi) u32;
     pub extern "kernel32" fn CloseHandle(hObject: HANDLE) callconv(.winapi) BOOL;
+    pub extern "kernel32" fn VirtualAlloc(lpAddress: ?*anyopaque, dwSize: usize, flAllocationType: u32, flProtect: u32) callconv(.winapi) ?*anyopaque;
     pub extern "kernel32" fn SetHandleInformation(hObject: HANDLE, dwMask: u32, dwFlags: u32) callconv(.winapi) BOOL;
     pub extern "kernel32" fn CreateIoCompletionPort(FileHandle: HANDLE, ExistingCompletionPort: ?HANDLE, CompletionKey: usize, NumberOfConcurrentThreads: u32) callconv(.winapi) ?HANDLE;
     pub extern "kernel32" fn GetQueuedCompletionStatusEx(CompletionPort: HANDLE, lpCompletionPortEntries: [*]OVERLAPPED_ENTRY, ulCount: u32, ulNumEntriesRemoved: *u32, dwMilliseconds: u32, fAlertable: BOOL) callconv(.winapi) BOOL;
@@ -353,6 +354,10 @@ pub fn monotonicNs() u64 {
     _ = kernel32.QueryPerformanceCounter(&counter);
     const ticks: u64 = @intCast(@max(counter, 0));
     return (ticks / freq) * std.time.ns_per_s + (ticks % freq) * std.time.ns_per_s / freq;
+}
+
+pub fn discardPages(ptr: *anyopaque, len: usize) bool {
+    return kernel32.VirtualAlloc(ptr, len, 0x00080000, 0x04) != null;
 }
 
 pub fn sleepMs(ms: u64) void {

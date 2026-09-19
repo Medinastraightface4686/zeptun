@@ -232,6 +232,18 @@ pub fn pageSize() usize {
     return std.heap.pageSize();
 }
 
+pub fn releasePages(mem: []u8) bool {
+    const page = pageSize();
+    const start = std.mem.alignForward(usize, @intFromPtr(mem.ptr), page);
+    const end = std.mem.alignBackward(usize, @intFromPtr(mem.ptr) + mem.len, page);
+    if (end <= start) return false;
+    const len = end - start;
+    if (is_linux) return linuxResult(linux.madvise(@ptrFromInt(start), len, linux.MADV.DONTNEED)) == 0;
+    if (is_windows) return windows.discardPages(@ptrFromInt(start), len);
+    if (is_posix_libc) return c.madvise(@ptrFromInt(start), len, c.MADV.FREE) == 0;
+    return false;
+}
+
 fn accessible(path: [:0]const u8, mode: u32) bool {
     if (is_linux) return linuxResult(linux.faccessat(linux.AT.FDCWD, path.ptr, mode, 0)) == 0;
     if (is_windows) return false;
