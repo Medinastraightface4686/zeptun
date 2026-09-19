@@ -28,6 +28,7 @@ pub const Document = struct {
         mode: ?config.StackMode = null,
         tcp_rx_window: ?u32 = null,
         tcp_rx_budget: ?u32 = null,
+        tcp_tx_budget: ?u32 = null,
         tcp_tx_buffer: ?u32 = null,
         tcp_mss_clamp: ?u16 = null,
         tcp_initial_cwnd: ?u16 = null,
@@ -254,6 +255,7 @@ pub const State = struct {
             set(&c.stack.mode, st.mode);
             set(&c.stack.tcp_rx_window, st.tcp_rx_window);
             set(&c.stack.tcp_rx_budget, st.tcp_rx_budget);
+            set(&c.stack.tcp_tx_budget, st.tcp_tx_budget);
             set(&c.stack.tcp_tx_buffer, st.tcp_tx_buffer);
             set(&c.stack.tcp_mss_clamp, st.tcp_mss_clamp);
             set(&c.stack.tcp_initial_cwnd, st.tcp_initial_cwnd);

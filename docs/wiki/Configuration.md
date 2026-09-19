@@ -71,6 +71,7 @@ A preset sets the defaults; every key after it in the document wins.
 | `tcp_rx_window` | 512 KB | largest receive window per connection |
 | `tcp_tx_buffer` | 1 MB | largest send buffer per connection |
 | `tcp_rx_budget` | 1 MB | per-worker memory that windows may grow into |
+| `tcp_tx_budget` | 16 MB | per-worker memory that downlink queues share; each flow gets an equal slice of it |
 | `tcp_mss_clamp` | 0 | clamp the advertised MSS |
 | `tcp_initial_cwnd` | 10 | initial congestion window in segments |
 | `congestion` | `cubic` | `cubic` or `newreno` |

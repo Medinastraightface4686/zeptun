@@ -355,7 +355,7 @@ pub fn Queue(comptime W: type) type {
         fn provideRing(q: *Self) void {
             const br = if (q.ring) |*r| r else return;
             while (q.free_bid_count > 0) {
-                const b = q.worker.pool.get() orelse break;
+                const b = q.worker.pool.getReserved() orelse break;
                 q.free_bid_count -= 1;
                 const bid = q.free_bids[q.free_bid_count];
                 q.ring_bufs[bid] = b;
@@ -454,7 +454,7 @@ pub fn Queue(comptime W: type) type {
             const w = q.worker;
             var budget: u32 = rx_burst;
             while (budget > 0 and q.running) : (budget -= 1) {
-                const nb = w.pool.get() orelse return;
+                const nb = w.pool.getReserved() orelse return;
                 const r = sys.read(q.fd, nb.ptr[nb.headroom() - q.vnet_len .. nb.cap]);
                 if (r <= 0) {
                     w.pool.put(nb);
@@ -466,7 +466,7 @@ pub fn Queue(comptime W: type) type {
         }
 
         fn arm(q: *Self, s: *RxSlot) bool {
-            const b = s.buf orelse (q.worker.pool.get() orelse return false);
+            const b = s.buf orelse (q.worker.pool.getReserved() orelse return false);
             s.buf = b;
             const start_off = b.headroom() - q.vnet_len;
             s.c = .{
@@ -476,6 +476,10 @@ pub fn Queue(comptime W: type) type {
             };
             q.worker.loop.submit(&s.c);
             return true;
+        }
+
+        pub fn starved(q: *const Self) bool {
+            return q.ring_starved or q.rx_starved != 0;
         }
 
         pub fn refill(q: *Self) void {
@@ -528,7 +532,7 @@ pub fn Queue(comptime W: type) type {
             if (vh.isGso()) w.counters.inc(.gso_rx_packets);
             W.onDevicePacket(w, b, vh);
             if (!q.completion) q.drainReadable();
-            const nb = w.pool.get() orelse {
+            const nb = w.pool.getReserved() orelse {
                 q.rx_starved += 1;
                 w.counters.inc(.pool_exhausted);
                 return .disarm;

@@ -43,6 +43,7 @@ pub const usage =
     \\  --max-udp N                UDP session cap
     \\  --tcp-rx-window BYTES      largest per connection receive window
     \\  --tcp-rx-budget BYTES      per worker memory windows may grow into beyond their 128K start
+    \\  --tcp-tx-budget BYTES      per worker memory downlink queues may grow into beyond their floor
     \\  --tcp-tx-buffer BYTES      per connection send buffer
     \\  --tcp-idle-timeout MS
     \\  --tcp-delayed-ack MS       piggyback ACKs for small segments up to MS, 0 = ACK immediately
@@ -262,6 +263,8 @@ pub fn parse(arena: std.mem.Allocator, raw_argv: []const []const u8) Error!Parse
             p.st.cfg.stack.tcp_rx_budget = @intCast(@min(try parseSize(try Flag.value(argv, &i)), 1 << 30));
         } else if (std.mem.eql(u8, a, "--tcp-tx-buffer")) {
             p.st.cfg.stack.tcp_tx_buffer = @intCast(@min(try parseSize(try Flag.value(argv, &i)), 1 << 30));
+        } else if (std.mem.eql(u8, a, "--tcp-tx-budget")) {
+            p.st.cfg.stack.tcp_tx_budget = @intCast(@min(try parseSize(try Flag.value(argv, &i)), 1 << 30));
         } else if (std.mem.eql(u8, a, "--tcp-idle-timeout")) {
             p.st.cfg.stack.tcp_idle_timeout_ms = try parseInt(u32, try Flag.value(argv, &i));
         } else if (std.mem.eql(u8, a, "--udp-timeout")) {

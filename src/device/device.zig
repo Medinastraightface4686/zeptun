@@ -30,6 +30,11 @@ pub const Capabilities = struct {
         return c.mtu;
     }
 
+    pub fn minBufferSize(c: Capabilities) u32 {
+        const need = pool.default_headroom + @max(c.mtu, 1500) + 64;
+        return @intCast(std.mem.alignForward(usize, need, 2048));
+    }
+
     pub fn bufferSize(c: Capabilities) u32 {
         const need = pool.default_headroom + @max(c.maxPacket(), pool.max_super_packet + 40) + 64;
         return @intCast(std.mem.alignForward(usize, need, 2048));

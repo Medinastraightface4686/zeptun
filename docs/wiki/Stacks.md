@@ -10,7 +10,7 @@
 
 The engine terminates TCP itself: SACK, timestamps, window scaling, delayed ACK, CUBIC or NewReno, RTO with a configurable floor and ceiling, and a receive window that grows within a per-worker budget. Data from the client is streamed into the upstream connection while the SOCKS5 handshake is still in flight, so the first request leaves with the handshake instead of after it.
 
-Relevant keys: `tcp_rx_window`, `tcp_tx_buffer`, `tcp_rx_budget`, `tcp_mss_clamp`, `tcp_initial_cwnd`, `congestion`, `sack`, `timestamps`, `window_scaling`, `tcp_delayed_ack_ms`, `tcp_min_rto_ms`, `tcp_max_rto_ms`, `tcp_early_accept`.
+Relevant keys: `tcp_rx_window`, `tcp_tx_buffer`, `tcp_rx_budget`, `tcp_tx_budget`, `tcp_mss_clamp`, `tcp_initial_cwnd`, `congestion`, `sack`, `timestamps`, `window_scaling`, `tcp_delayed_ack_ms`, `tcp_min_rto_ms`, `tcp_max_rto_ms`, `tcp_early_accept`.
 
 ## System stack
 

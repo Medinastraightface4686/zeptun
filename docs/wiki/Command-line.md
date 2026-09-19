@@ -27,6 +27,7 @@ stack:
   --max-udp N                UDP session cap
   --tcp-rx-window BYTES      largest per connection receive window
   --tcp-rx-budget BYTES      per worker memory windows may grow into beyond their 128K start
+  --tcp-tx-budget BYTES      per worker memory downlink queues may grow into beyond their floor
   --tcp-tx-buffer BYTES      per connection send buffer
   --tcp-idle-timeout MS
   --tcp-delayed-ack MS       piggyback ACKs for small segments up to MS, 0 = ACK immediately

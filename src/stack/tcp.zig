@@ -44,6 +44,7 @@ pub inline fn seqGe(a: u32, b: u32) bool {
 }
 
 pub const rx_ring_capacity = 64;
+pub const rx_ceiling_max: u64 = 64 << 20;
 pub const ooo_capacity = 16;
 pub const max_parts = device.max_iov - 1;
 pub const upstream_iov = 16;
@@ -159,6 +160,7 @@ pub fn Tcp(comptime W: type) type {
             rcv_nxt: u32 = 0,
             rcv_adv: u32 = 0,
             rcv_cap: u32 = 65536,
+            snd_cap: u32 = 65536,
             rcv_wscale: u8 = 0,
             peer_mss: u16 = 536,
             mss: u16 = 536,
@@ -199,6 +201,7 @@ pub fn Tcp(comptime W: type) type {
             last_active: u64 = 0,
             target: addr.Endpoint = .{},
             next_dirty: ?*Conn = null,
+            next_starved: ?*Conn = null,
             up: Upstream = .{},
 
             inline fn dataOffset(c: *const Conn) u32 {
@@ -228,6 +231,9 @@ pub fn Tcp(comptime W: type) type {
         rx_rings: slab.Slab(RxRing, 32) = .{},
         ooo_rings: slab.Slab(OooRing, 64) = .{},
         dirty_head: ?*Conn = null,
+        starved_head: ?*Conn = null,
+        starved_tail: ?*Conn = null,
+        rcv_room: u32 = std.math.maxInt(u32),
         dirty_tail: ?*Conn = null,
         moving: [elastic.move_capacity]Move = undefined,
         moving_len: u8 = 0,
@@ -238,6 +244,9 @@ pub fn Tcp(comptime W: type) type {
         rx_initial: u32,
         rx_budget: u64,
         rx_grown: u64 = 0,
+        tx_budget: u64,
+        tx_grown: u64 = 0,
+        rx_ceiling: u64 = std.math.maxInt(u64),
         tx_buffer: u32,
         rcv_wscale: u8,
         pin_threshold: u32,
@@ -256,6 +265,7 @@ pub fn Tcp(comptime W: type) type {
                 .rx_window = @max(cfg.stack.tcp_rx_window, 4096),
                 .rx_initial = @min(@max(cfg.stack.tcp_rx_window, 4096), 128 * 1024),
                 .rx_budget = cfg.stack.tcp_rx_budget,
+                .tx_budget = cfg.stack.tcp_tx_budget,
                 .tx_buffer = @max(cfg.stack.tcp_tx_buffer, 4096),
                 .rcv_wscale = if (cfg.stack.tcp_window_scaling) wscale else 0,
                 .pin_threshold = @max(buffer_size / 4, 512),
@@ -325,7 +335,58 @@ pub fn Tcp(comptime W: type) type {
             t.dirty_tail = c;
         }
 
+        fn markStarved(t: *Self, c: *Conn) void {
+            if (c.up.starved) return;
+            c.up.starved = true;
+            c.next_starved = null;
+            if (t.starved_tail) |tail| tail.next_starved = c else t.starved_head = c;
+            t.starved_tail = c;
+        }
+
+        fn dropStarved(t: *Self, c: *Conn) void {
+            if (!c.up.starved) return;
+            c.up.starved = false;
+            var prev: ?*Conn = null;
+            var cur = t.starved_head;
+            while (cur) |it| : ({
+                prev = it;
+                cur = it.next_starved;
+            }) {
+                if (it != c) continue;
+                if (prev) |pv| pv.next_starved = c.next_starved else t.starved_head = c.next_starved;
+                if (t.starved_tail == c) t.starved_tail = prev;
+                break;
+            }
+            c.next_starved = null;
+        }
+
+        pub fn hasStarved(t: *const Self) bool {
+            return t.starved_head != null;
+        }
+
+        pub fn starvedCount(t: *const Self) u64 {
+            var n: u64 = 0;
+            var cur = t.starved_head;
+            while (cur) |c| : (cur = c.next_starved) n += 1;
+            return n;
+        }
+
+        fn wakeStarved(t: *Self, w: *W) void {
+            var quota = w.pool.available() -| poolReserve(&w.pool);
+            while (quota > 0) : (quota -= 1) {
+                const c = t.starved_head orelse return;
+                t.starved_head = c.next_starved;
+                if (t.starved_head == null) t.starved_tail = null;
+                c.next_starved = null;
+                c.up.starved = false;
+                if (c.releasing or c.moved) continue;
+                t.startRead(w, c);
+            }
+        }
+
         pub fn flush(t: *Self, w: *W) void {
+            t.updateRoom(w);
+            if (t.starved_head != null and w.pool.available() > poolReserve(&w.pool)) t.wakeStarved(w);
             var rounds: u32 = 0;
             while (t.dirty_head != null and rounds < 4) : (rounds += 1) {
                 var list = t.dirty_head;
@@ -353,10 +414,6 @@ pub fn Tcp(comptime W: type) type {
                         t.kickWrite(w, c);
                     }
                     t.output(w, c);
-                    if (c.up.starved) {
-                        c.up.starved = false;
-                        t.startRead(w, c);
-                    }
                 }
             }
         }
@@ -478,6 +535,8 @@ pub fn Tcp(comptime W: type) type {
             c.snd_nxt = c.iss;
             c.snd_max = c.iss;
             c.cwnd = @as(u32, cfg.stack.tcp_initial_cwnd) * c.mss;
+            c.snd_cap = t.sndFloor(c);
+            t.setSndCap(c, c.cwnd * 2);
             w.counters.inc(.tcp_opened);
             w.counters.inc(.tcp_active);
             if (cfg.earlyAccept()) {
@@ -586,9 +645,16 @@ pub fn Tcp(comptime W: type) type {
         }
 
         fn rcvSpace(t: *const Self, c: *const Conn) u32 {
-            _ = t;
             const used = c.rx_bytes + c.ooo_bytes;
-            return if (used >= c.rcv_cap) 0 else c.rcv_cap - used;
+            const space = if (used >= c.rcv_cap) 0 else c.rcv_cap - used;
+            return @min(space, t.rcv_room);
+        }
+
+        fn updateRoom(t: *Self, w: *W) void {
+            const spare: u64 = w.pool.available() -| poolReserve(&w.pool);
+            const payload: u64 = w.pool.buffer_size - w.pool.headroom;
+            const room = @min(spare * payload, t.rx_ceiling);
+            t.rcv_room = @intCast(@min(room / @max(t.localCount(), 1), std.math.maxInt(u32)));
         }
 
         fn windowField(t: *const Self, c: *Conn, syn: bool) u16 {
@@ -1158,6 +1224,7 @@ pub fn Tcp(comptime W: type) type {
 
         fn ccOnAck(t: *Self, w: *W, c: *Conn, acked: u32) void {
             if (acked == 0) return;
+            t.setSndCap(c, @min(c.cwnd, c.snd_wnd) *| 2);
             const cap = t.tx_buffer * 2 + 64 * @as(u32, c.mss);
             if (c.cwnd < c.ssthresh) {
                 c.cwnd = @min(c.cwnd +| acked, @min(c.ssthresh +| c.mss, cap));
@@ -1375,8 +1442,8 @@ pub fn Tcp(comptime W: type) type {
         fn startRead(t: *Self, w: *W, c: *Conn) void {
             const up = &c.up;
             if (!up.connected or up.eof or c.releasing or c.migrating or up.rx_c.isActive() or up.fd == sys.invalid_fd) return;
-            if (c.tx_bytes >= t.tx_buffer) return;
-            const space = t.tx_buffer - c.tx_bytes;
+            if (c.tx_bytes >= c.snd_cap) return;
+            const space = c.snd_cap - c.tx_bytes;
             if (space < 1024 and c.tx_bytes > 0) return;
             if (!up.bulk and up.rx_buf == null) {
                 up.rx_c = .{
@@ -1401,8 +1468,7 @@ pub fn Tcp(comptime W: type) type {
             if (up.rx_buf) |b| return b;
             const b = if (w.pool.available() > poolReserve(&w.pool)) w.pool.get() else null;
             up.rx_buf = b orelse {
-                up.starved = true;
-                t.markDirty(c);
+                t.markStarved(c);
                 w.counters.inc(.pool_exhausted);
                 return null;
             };
@@ -1424,9 +1490,9 @@ pub fn Tcp(comptime W: type) type {
                 t.upstreamData(w, c, result);
                 return .disarm;
             }
-            if (c.tx_bytes >= t.tx_buffer) return .disarm;
+            if (c.tx_bytes >= c.snd_cap) return .disarm;
             const b = t.readBuffer(w, c) orelse return .disarm;
-            const n = w.recvNow(up.fd, b.ptr[b.headroom()..][0..@min(b.cap - b.headroom(), t.tx_buffer - c.tx_bytes)]);
+            const n = w.recvNow(up.fd, b.ptr[b.headroom()..][0..@min(b.cap - b.headroom(), c.snd_cap - c.tx_bytes)]);
             t.upstreamData(w, c, n);
             return .disarm;
         }
@@ -1508,6 +1574,30 @@ pub fn Tcp(comptime W: type) type {
 
         fn capFloor(t: *const Self, caps: device.Capabilities) u32 {
             return if (caps.vnet_hdr) t.rx_window else t.rx_initial;
+        }
+
+        fn sndFloor(t: *const Self, c: *const Conn) u32 {
+            return @min(t.tx_buffer, @max(4096, 2 * @as(u32, c.mss)));
+        }
+
+        fn sndShare(t: *const Self, floor: u32) u32 {
+            const live: u64 = @max(t.localCount(), 1);
+            return @max(floor, @as(u32, @intCast(@min(t.tx_budget / live, t.tx_buffer))));
+        }
+
+        fn setSndCap(t: *Self, c: *Conn, want: u32) void {
+            const floor = t.sndFloor(c);
+            const cap = std.math.clamp(want, floor, t.sndShare(floor));
+            const old_extra: u64 = c.snd_cap -| floor;
+            const new_extra: u64 = cap -| floor;
+            if (new_extra > old_extra and t.tx_grown + (new_extra - old_extra) > t.tx_budget) return;
+            t.tx_grown = t.tx_grown - old_extra + new_extra;
+            c.snd_cap = cap;
+        }
+
+        fn releaseSndCap(t: *Self, c: *Conn) void {
+            t.tx_grown -|= c.snd_cap -| t.sndFloor(c);
+            c.snd_cap = t.sndFloor(c);
         }
 
         fn setRcvCap(t: *Self, w: *W, c: *Conn, want: u32) void {
@@ -1717,8 +1807,10 @@ pub fn Tcp(comptime W: type) type {
             t.releaseOoo(w, c);
             c.tx.releaseAll(&w.pool);
             c.tx_bytes = 0;
+            t.dropStarved(c);
             t.rx_grown -|= c.rcv_cap -| t.capFloor(w.caps());
             c.rcv_cap = t.capFloor(w.caps());
+            t.releaseSndCap(c);
             w.counters.dec(.tcp_active);
             w.counters.inc(.tcp_closed);
             t.conns.remove(t.connIndex(c));
@@ -1769,6 +1861,13 @@ pub fn Tcp(comptime W: type) type {
                     t.abort(w, c, true);
                 }
             }
+        }
+
+        pub fn fitBudgets(t: *Self, p: *const pool.Pool) void {
+            const usable: u64 = @as(u64, p.capacity() -| p.reserve) * (p.buffer_size - p.headroom);
+            t.tx_budget = @min(t.tx_budget, usable / 2);
+            t.rx_budget = @min(t.rx_budget, usable / 4);
+            t.rx_ceiling = @min(usable / 2, rx_ceiling_max);
         }
 
         pub fn localCount(t: *const Self) u32 {
@@ -1926,7 +2025,9 @@ pub fn Tcp(comptime W: type) type {
             c.tx_bytes = 0;
             c.tx_head_off = 0;
             c.ack_delayed = false;
+            t.dropStarved(c);
             t.rx_grown -|= c.rcv_cap -| t.capFloor(w.caps());
+            t.tx_grown -|= c.snd_cap -| t.sndFloor(c);
             c.migrating = false;
             c.moved = true;
             c.move_to = to;
@@ -1963,6 +2064,8 @@ pub fn Tcp(comptime W: type) type {
             c.* = rec.conn;
             c.dirty = false;
             c.next_dirty = null;
+            c.next_starved = null;
+            c.up.starved = false;
             c.free_pending = false;
             c.migrating = false;
             c.moved = false;
@@ -1984,6 +2087,7 @@ pub fn Tcp(comptime W: type) type {
             }
             w.loop.register(c.up.fd) catch {};
             t.rx_grown += c.rcv_cap -| t.capFloor(w.caps());
+            t.tx_grown += c.snd_cap -| t.sndFloor(c);
             w.counters.inc(.tcp_active);
             t.markDirty(c);
             t.startRead(w, c);

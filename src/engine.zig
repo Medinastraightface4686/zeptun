@@ -21,6 +21,9 @@ const elastic = @import("elastic.zig");
 
 pub const State = enum(u8) { created, running, stopping, stopped };
 
+const pool_trim_ms: u64 = 1000;
+const starved_wait_ms: u64 = 5;
+
 const session_bytes: u32 = 2048;
 const idle_wait_ms: u64 = 30_000;
 const drain_limit_ms = elastic.drain_limit_ms;
@@ -120,6 +123,7 @@ pub fn Worker(comptime L: type) type {
         last_activity_ns: u64 = 0,
         activity_mark: u64 = 0,
         rebalance_seen: u32 = 0,
+        trim_at_ms: u64 = 0,
         drain_since: u64 = 0,
         drain_scan_at: u64 = 0,
         drain_rx_mark: u64 = 0,
@@ -156,10 +160,12 @@ pub fn Worker(comptime L: type) type {
             });
             errdefer w.loop.deinit();
             w.pool = try pool.Pool.init(allocator, .{ .count = sizing.buffers_per_worker, .buffer_size = sizing.buffer_size });
+            w.pool.setReserve(@max(64, @as(u32, cfg.io.rx_parallel) * 4));
             errdefer w.pool.deinit();
             w.wheel = timeouts.Wheel.init(w.loop.now());
             if (has_userspace_tcp) {
                 w.tcp = try Tcp.init(allocator, cfg, sizing.tcp_sessions_per_worker, sizing.buffer_size, engine.secret +% id);
+                w.tcp.fitBudgets(&w.pool);
             }
             errdefer if (has_userspace_tcp) w.tcp.deinit(allocator);
             w.udp = try Udp.init(allocator, sizing.udp_sessions_per_worker, cfg.stack.udp_idle_timeout_ms, cfg.stack.udp == .enabled, cfg.stack.udp_nat);
@@ -532,6 +538,26 @@ pub fn Worker(comptime L: type) type {
             return false;
         }
 
+        fn deviceStarved(w: *Self) bool {
+            return switch (w.device) {
+                .tun => |*q| has_tun and q.starved(),
+                else => false,
+            };
+        }
+
+        fn trimWaitMs(w: *Self, wait_ms: u64) u64 {
+            if (has_userspace_tcp and w.tcp.hasStarved()) return @min(wait_ms, starved_wait_ms);
+            if (w.deviceStarved()) return @min(wait_ms, starved_wait_ms);
+            if (w.pool.trimPending()) return @min(wait_ms, pool_trim_ms);
+            return wait_ms;
+        }
+
+        fn trimPool(w: *Self, now_ms: u64) void {
+            if (now_ms < w.trim_at_ms) return;
+            w.trim_at_ms = now_ms + pool_trim_ms;
+            if (w.pool.trimPending()) _ = w.pool.trim();
+        }
+
         fn elasticWaitMs(w: *Self, wait_ms: u64) u64 {
             const el = w.engine.elastic orelse return wait_ms;
             if ((has_userspace_tcp and w.tcp.moving_len > 0) or w.udp.moving_len > 0) return @min(wait_ms, 1);
@@ -541,13 +567,14 @@ pub fn Worker(comptime L: type) type {
         }
 
         pub fn iterate(w: *Self, max_wait_ms: u64) void {
-            const wait_ms: u64 = if (w.hasImmediateWork()) 0 else w.elasticWaitMs(w.wheel.timeoutMs(max_wait_ms));
+            const wait_ms: u64 = if (w.hasImmediateWork()) 0 else w.trimWaitMs(w.elasticWaitMs(w.wheel.timeoutMs(max_wait_ms)));
             w.loop.run(wait_ms * std.time.ns_per_ms) catch |err| {
                 log.err("worker {d}: event loop failure: {t}", .{ w.id, err });
                 w.engine.requestStop();
             };
             w.wheel.advance(w.loop.now(), w, onTimer);
             _ = w.pollSources();
+            w.trimPool(w.loop.now());
             if (w.engine.elastic) |el| w.elasticStep(el);
             const epoch = w.engine.network_epoch.load(.acquire);
             if (epoch != w.network_epoch) {
@@ -1177,7 +1204,7 @@ pub const Engine = struct {
         if (cap > workers) try e.initElastic(cap);
         if (has_redirect and cfg.route.auto_redirect and cfg.device.kind == .tun) try e.openRedirectListeners(workers);
         e.backend = try e.resolveBackend();
-        e.sizing = config.size(cfg, workers, e.caps.bufferSize(), session_bytes);
+        e.sizing = config.size(cfg, workers, e.caps.bufferSize(), e.caps.minBufferSize(), session_bytes);
         e.counters = try e.allocator.alloc(stats.Counters, e.worker_cap);
         for (e.counters) |*c| c.* = .{};
         try e.createWorkers();

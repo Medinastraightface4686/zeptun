@@ -279,6 +279,7 @@ pub const StackConfig = struct {
     tcp_rx_window: u32 = 512 << 10,
     tcp_tx_buffer: u32 = 1 << 20,
     tcp_rx_budget: u32 = 1 << 20,
+    tcp_tx_budget: u32 = 16 << 20,
     tcp_mss_clamp: u16 = 0,
     tcp_initial_cwnd: u16 = 10,
     tcp_congestion: Congestion = .cubic,
@@ -456,6 +457,7 @@ pub const Config = struct {
                 c.stack.max_udp_sessions = 65536;
                 c.stack.tcp_rx_window = 4 << 20;
                 c.stack.tcp_tx_buffer = 4 << 20;
+                c.stack.tcp_tx_budget = 64 << 20;
                 c.io.ring_entries = 4096;
                 c.io.rx_parallel = 32;
             },
@@ -467,6 +469,7 @@ pub const Config = struct {
                 c.stack.mode = .userspace;
                 c.stack.tcp_rx_window = 64 << 10;
                 c.stack.tcp_tx_buffer = 128 << 10;
+                c.stack.tcp_tx_budget = 4 << 20;
                 c.stack.tcp_timestamps = false;
                 c.stack.max_tcp_sessions = 1200;
                 c.stack.max_udp_sessions = 512;
@@ -514,7 +517,9 @@ pub const Sizing = struct {
     udp_sessions_per_worker: u32,
 };
 
-pub fn size(c: *const Config, workers: u16, buffer_size: u32, session_bytes: u32) Sizing {
+pub const min_buffers_per_worker: u32 = 1024;
+
+pub fn size(c: *const Config, workers: u16, buffer_size: u32, min_buffer_size: u32, session_bytes: u32) Sizing {
     const w: u32 = @max(1, workers);
     var s: Sizing = .{
         .workers = @intCast(w),
@@ -528,7 +533,14 @@ pub fn size(c: *const Config, workers: u16, buffer_size: u32, session_bytes: u32
     } else if (c.memory.budget_bytes != 0) {
         const session_cost: u64 = @as(u64, s.tcp_sessions_per_worker + s.udp_sessions_per_worker) * session_bytes * w;
         const remaining: u64 = if (c.memory.budget_bytes > session_cost) c.memory.budget_bytes - session_cost else c.memory.budget_bytes / 2;
-        s.buffers_per_worker = @intCast(std.math.clamp(remaining / (@as(u64, s.buffer_size) * w), 64, 1 << 15));
+        const per_worker = remaining / w;
+        if (c.memory.buffer_size == 0) {
+            const floor = @max(min_buffer_size, 2048);
+            while (s.buffer_size > floor and per_worker / s.buffer_size < min_buffers_per_worker) {
+                s.buffer_size = @max(floor, s.buffer_size / 2);
+            }
+        }
+        s.buffers_per_worker = @intCast(std.math.clamp(per_worker / s.buffer_size, 64, 1 << 15));
     } else {
         s.buffers_per_worker = std.math.clamp(@as(u32, @intCast(@min((256 << 20) / @as(u64, s.buffer_size), 1 << 15))), 256, 1 << 15);
     }
@@ -540,7 +552,7 @@ test "presets validate" {
     try d.validate();
     const m = Config.fromPreset(.mobile);
     try m.validate();
-    const s = size(&m, 1, 4096, 1024);
+    const s = size(&m, 1, 4096, 4096, 1024);
     try std.testing.expect(s.buffers_per_worker * 4096 <= 24 << 20);
     d.handler.kind = .socks5;
     try std.testing.expectError(error.InvalidArgument, d.validate());
