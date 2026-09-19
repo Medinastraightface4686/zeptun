@@ -4,17 +4,17 @@
 <text x="12" y="36" font-size="11" fill="#64748b">GitHub-hosted runner &#183; higher is better</text>
 <text x="120" y="58" text-anchor="end" font-size="11" fill="#475569">zeptun</text>
 <rect x="128" y="46" width="238" height="13" rx="2" fill="#2563eb"/>
-<text x="372" y="58" font-size="11" fill="#0f172a">22.8 Gbit/s</text>
+<text x="372" y="58" font-size="11" fill="#0f172a">23.1 Gbit/s</text>
 <text x="120" y="78" text-anchor="end" font-size="11" fill="#475569">sing-box gvisor</text>
-<rect x="128" y="66" width="158" height="13" rx="2" fill="#94a3b8"/>
-<text x="292" y="78" font-size="11" fill="#0f172a">15.1 Gbit/s</text>
+<rect x="128" y="66" width="156" height="13" rx="2" fill="#94a3b8"/>
+<text x="290" y="78" font-size="11" fill="#0f172a">15.2 Gbit/s</text>
 <text x="120" y="98" text-anchor="end" font-size="11" fill="#475569">hev-socks5-tunnel</text>
-<rect x="128" y="86" width="133" height="13" rx="2" fill="#94a3b8"/>
-<text x="267" y="98" font-size="11" fill="#0f172a">12.7 Gbit/s</text>
+<rect x="128" y="86" width="139" height="13" rx="2" fill="#94a3b8"/>
+<text x="273" y="98" font-size="11" fill="#0f172a">13.5 Gbit/s</text>
 <text x="120" y="118" text-anchor="end" font-size="11" fill="#475569">tun2socks</text>
-<rect x="128" y="106" width="81" height="13" rx="2" fill="#94a3b8"/>
-<text x="215" y="118" font-size="11" fill="#0f172a">7.8 Gbit/s</text>
+<rect x="128" y="106" width="80" height="13" rx="2" fill="#94a3b8"/>
+<text x="214" y="118" font-size="11" fill="#0f172a">7.8 Gbit/s</text>
 <text x="120" y="138" text-anchor="end" font-size="11" fill="#475569">sing-box system</text>
-<rect x="128" y="126" width="47" height="13" rx="2" fill="#94a3b8"/>
-<text x="181" y="138" font-size="11" fill="#0f172a">4.6 Gbit/s</text>
+<rect x="128" y="126" width="48" height="13" rx="2" fill="#94a3b8"/>
+<text x="182" y="138" font-size="11" fill="#0f172a">4.7 Gbit/s</text>
 </svg>
