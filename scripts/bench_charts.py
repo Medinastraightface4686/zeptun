@@ -141,7 +141,7 @@ def compact(path, title, note, rows, unit, better, width=440, paired=False):
             )
             text = f"{item:.1f}" if item < 100 else f"{item:.0f}"
             out.append(
-                f'<text x="{label_width + length + 6}" y="{y + slot * bar + bar - 3}" font-size="11" fill="#0f172a">{text} {escape(unit)}</text>'
+                f'<text x="{label_width + length + 8}" y="{y + slot * bar + bar - 2}" font-size="11" fill="#0f172a">{text} {escape(unit)}</text>'
             )
         y += bar * (2 if paired else 1) + gap
     out.append("</svg>")
@@ -306,24 +306,30 @@ def main():
             "higher is better",
         )
 
-    memory = {}
+    paired = {}
     settle = 0
     for row in rows:
-        memory.setdefault(("peak while forwarding", row["engine"]), []).append(row["rss_kb"] / 1024.0)
+        entry = paired.setdefault((row["engine"], row["scenario"]), ([], []))
+        entry[0].append(row["rss_kb"] / 1024.0)
         if "rss_after_kb" in row:
-            memory.setdefault(("after the load stops", row["engine"]), []).append(row["rss_after_kb"] / 1024.0)
+            entry[1].append(row["rss_after_kb"] / 1024.0)
             settle = max(settle, row.get("settle_s", 0))
-    if memory:
-        engines = sorted({key[1] for key in memory}, key=lambda name: (0 if name.startswith("zeptun") else 1, name))
-        groups = ["peak while forwarding"]
-        values = {key: max(items) for key, items in memory.items() if key[0] == groups[0]}
-        note = "highest sample of every run"
+    if paired:
+        engines = sorted({key[0] for key in paired}, key=lambda name: (0 if name.startswith("zeptun") else 1, name))
+        peak = {}
+        rest = {}
+        for (engine, _), (loaded, idle) in paired.items():
+            peak.setdefault(engine, []).append(statistics.median(loaded))
+            if idle:
+                rest.setdefault(engine, []).append(statistics.median(idle))
+        groups = ["while forwarding"]
+        values = {(groups[0], engine): max(items) for engine, items in peak.items()}
+        note = "worst scenario of each engine"
         if settle:
             groups.append("after the load stops")
-            for key, items in memory.items():
-                if key[0] == groups[1]:
-                    values[key] = max(items)
-            note = "highest sample of every run, then again after %d s of idle" % settle
+            for engine, items in rest.items():
+                values[(groups[1], engine)] = max(items)
+            note = "worst scenario of each engine, read again after %d s of idle" % settle
         chart(
             os.path.join(dest, "memory.svg"),
             "Resident memory",
