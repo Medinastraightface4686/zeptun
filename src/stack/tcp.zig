@@ -1573,7 +1573,8 @@ pub fn Tcp(comptime W: type) type {
         }
 
         fn capFloor(t: *const Self, caps: device.Capabilities) u32 {
-            return if (caps.vnet_hdr) t.rx_window else t.rx_initial;
+            _ = caps;
+            return t.rx_initial;
         }
 
         fn sndFloor(t: *const Self, c: *const Conn) u32 {
@@ -1662,8 +1663,10 @@ pub fn Tcp(comptime W: type) type {
                     t.consumeRx(w, c, n);
                     t.setRcvCap(w, c, c.rcv_cap / 2);
                 } else {
-                    if (up.limited and c.rcv_cap < t.rx_window) t.setRcvCap(w, c, @min(c.rcv_cap * 2, t.rx_window));
                     t.consumeRx(w, c, n);
+                    if (up.limited and c.rx_count == 0 and c.rcv_cap < t.rx_window) {
+                        t.setRcvCap(w, c, @min(c.rcv_cap * 2, t.rx_window));
+                    }
                 }
                 t.kickWrite(w, c);
                 return .disarm;

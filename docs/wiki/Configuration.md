@@ -68,8 +68,8 @@ A preset sets the defaults; every key after it in the document wins.
 | Key | Default | Meaning |
 |---|---|---|
 | `mode` | `userspace` | `userspace`, `hybrid`, `system` |
-| `tcp_rx_window` | 512 KB | largest receive window per connection |
-| `tcp_tx_buffer` | 1 MB | largest send buffer per connection |
+| `tcp_rx_window` | 512 KB | largest receive window per connection; a flow starts at 128 KB and grows only while it drains its queue |
+| `tcp_tx_buffer` | 256 KB | largest send buffer per connection; flows start at a small floor and grow into `tcp_tx_budget` |
 | `tcp_rx_budget` | 1 MB | per-worker memory that windows may grow into |
 | `tcp_tx_budget` | 16 MB | per-worker memory that downlink queues share; each flow gets an equal slice of it |
 | `tcp_mss_clamp` | 0 | clamp the advertised MSS |
