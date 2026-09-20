@@ -206,6 +206,7 @@ pub const Pool = struct {
         b.len = 0;
         p.in_use += 1;
         if (p.in_use > p.peak) p.peak = p.in_use;
+        if (p.in_use > p.hwm) p.hwm = p.in_use;
         return b;
     }
 
@@ -278,15 +279,19 @@ pub const Pool = struct {
         return @max(p.in_use, p.hwm) + (@as(u32, 1) << p.slab_shift);
     }
 
+    pub inline fn liveCount(p: *const Pool) u32 {
+        return p.in_use;
+    }
+
     pub inline fn trimPending(p: *const Pool) bool {
-        return p.resident > p.keepSlabs();
+        return p.resident > p.in_use + (@as(u32, 1) << p.slab_shift);
     }
 
     pub fn trim(p: *Pool) usize {
         if (p.initialized == 0) return 0;
         _ = p.drainRemote();
-        p.hwm = @max(p.in_use, p.hwm / 2);
         const keep = p.keepSlabs();
+        p.hwm = p.in_use;
         if (p.resident <= keep) return 0;
         p.compact();
         var live: u32 = p.in_use;

@@ -564,7 +564,7 @@ pub fn Worker(comptime L: type) type {
         fn trimPool(w: *Self, now_ms: u64) void {
             if (now_ms < w.trim_at_ms) return;
             w.trim_at_ms = now_ms + pool_trim_ms;
-            if (w.pool.trimPending()) _ = w.pool.trim();
+            _ = w.pool.trim();
             switch (w.device) {
                 .tun => |*q| if (has_tun) {
                     _ = q.reclaimIdle();
